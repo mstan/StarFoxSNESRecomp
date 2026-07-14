@@ -16,3 +16,6 @@ saves/
 *.log
 *.out
 *.err
+*.dmp
+*.ram
+crash_report_*.json
