@@ -1,0 +1,18 @@
+# User-supplied ROMs and archives are never committed.
+*.sfc
+*.smc
+*.zip
+
+# Generated and local build products.
+build*/
+src/gen/
+snesrecomp
+rom.cfg
+keybinds.ini
+saves/
+*.sav
+*.bmp
+*.png
+*.log
+*.out
+*.err
