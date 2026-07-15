@@ -1,0 +1,76 @@
+<#
+Package a completed Star Fox Windows release build.
+
+The build itself is intentionally separate so developers can choose their
+toolchain and keep compilation priority under local control. The resulting zip
+contains the executable, MinGW runtime dependencies, launcher assets,
+configuration, and README. ROMs and ROM-derived generated C are never staged.
+
+Example:
+  powershell -File tools\make_release.ps1 -Version 0.0.1 `
+    -BuildDir build-release -RuntimeBinDir C:\msys64\mingw64\bin
+#>
+param(
+  [Parameter(Mandatory = $true)][string]$Version,
+  [string]$BuildDir = 'build-release',
+  [string]$RuntimeBinDir = 'C:\msys64\mingw64\bin'
+)
+
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $root $BuildDir
+$exe = Join-Path $build 'StarFoxSNESRecomp.exe'
+$launcher = Join-Path $build 'launcher'
+
+if (-not (Test-Path -LiteralPath $exe)) {
+  throw "Release executable missing: $exe"
+}
+if (-not (Test-Path -LiteralPath $launcher)) {
+  throw "Launcher assets missing: $launcher"
+}
+
+$out = Join-Path $root 'release-stage'
+$stageName = "StarFoxSNESRecomp-windows-$Version"
+$stage = Join-Path $out $stageName
+$zip = Join-Path $out "$stageName.zip"
+
+$outFull = [IO.Path]::GetFullPath($out).TrimEnd('\') + '\'
+$stageFull = [IO.Path]::GetFullPath($stage)
+$zipFull = [IO.Path]::GetFullPath($zip)
+if (-not $stageFull.StartsWith($outFull, [StringComparison]::OrdinalIgnoreCase) -or
+    -not $zipFull.StartsWith($outFull, [StringComparison]::OrdinalIgnoreCase)) {
+  throw 'Refusing to clean release paths outside release-stage.'
+}
+
+if (Test-Path -LiteralPath $stage) {
+  Remove-Item -LiteralPath $stage -Recurse -Force
+}
+if (Test-Path -LiteralPath $zip) {
+  Remove-Item -LiteralPath $zip -Force
+}
+New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+Copy-Item -LiteralPath $exe -Destination $stage
+Copy-Item -LiteralPath (Join-Path $root 'config.ini') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
+Copy-Item -LiteralPath $launcher -Destination $stage -Recurse
+
+$runtimeDlls = @(
+  'SDL2.dll',
+  'libgcc_s_seh-1.dll',
+  'libstdc++-6.dll',
+  'libwinpthread-1.dll'
+)
+foreach ($name in $runtimeDlls) {
+  $source = Join-Path $RuntimeBinDir $name
+  if (-not (Test-Path -LiteralPath $source)) {
+    throw "Required MinGW runtime DLL missing: $source"
+  }
+  Copy-Item -LiteralPath $source -Destination $stage
+}
+
+Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+
+Write-Host "--- $stageName ---"
+Get-ChildItem -LiteralPath $stage | Select-Object Name, Length | Out-Host
+Get-FileHash -LiteralPath $zip -Algorithm SHA256 | Out-Host

@@ -13,18 +13,29 @@ the Super FX/GSU coprocessor extensively. Its low-level execution and
 architectural state remain authoritative; compiled paths may optimize that
 behavior but must not replace or diverge from it.
 
-## Current status: development preview
+## Current status: v0.0.1 development preview
 
 The game boots and its attract sequence, menus, route selection, training, and
 gameplay have passed basic interactive testing. The project also includes an
 opt-in expanded viewport, with 16:9 as the current validated widescreen preset.
 Authentic 4:3 output remains available.
 
-This repository does not have a packaged release yet. Longer play sessions,
-additional routes, save-state behavior, and non-Windows builds still need more
-coverage before the project should be described as production-ready. Please
-report reproducible visual, audio, timing, or stability problems through
-[GitHub Issues](../../issues).
+Longer play sessions, additional routes, save-state behavior, and non-Windows
+builds still need more coverage before the project should be described as
+production-ready. Please report reproducible visual, audio, timing, or
+stability problems through [GitHub Issues](../../issues).
+
+## Quick start (Windows release)
+
+1. Download `StarFoxSNESRecomp-windows-0.0.1.zip` from
+   [Releases](../../releases) and extract it into a fresh folder.
+2. Run `StarFoxSNESRecomp.exe`.
+3. In the launcher, choose your legally obtained *Star Fox (USA), version 1.2*
+   ROM. The launcher verifies the ROM before enabling play.
+4. Review graphics and controller settings, then select **Play**.
+
+The launcher remembers the ROM path. Enable **Skip Launcher on Boot** for
+direct startup; pass `--launcher` to show it again.
 
 ## Required ROM
 
@@ -93,6 +104,7 @@ Python 3.9+, SDL2, and OpenGL development files.
 ```bash
 git clone https://github.com/mstan/StarFoxSNESRecomp
 git clone https://github.com/mstan/snesrecomp
+git -C snesrecomp submodule update --init lib/RmlUi lib/freetype
 cd StarFoxSNESRecomp
 ```
 
@@ -133,6 +145,8 @@ in `snesrecomp.pin`.
 | `snesrecomp/` | Junction or symlink to the sibling framework checkout. |
 | `third_party/` | Vendored dependencies retaining their own licenses. |
 | `config.ini` | Runtime graphics, audio, controller, and hotkey settings. |
+| `recomp/launcher/` | Star Fox launcher theme and North American cover thumbnail. |
+| `tools/make_release.ps1` | Packages a completed MinGW release build and its runtime DLLs. |
 
 ## Reference material
 
