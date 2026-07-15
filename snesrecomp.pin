@@ -1,2 +1,5 @@
 # Pinned snesrecomp engine revision used for this project.
-sha = efa05e9f02cf4c611b83da80b48cf149d5cbcbd9
+sha = 279d7877a0e9d23b9df2fbf7c3e9b04a4842a161
+# 2026-07-14 DerrickGold candidate integration validated in Star Fox at
+# authentic 4:3: SimpleHDMA bounds, bank sharding, opt-in widescreen policies,
+# no-sprite-limits support, and the filtered interpreter policy hook.
