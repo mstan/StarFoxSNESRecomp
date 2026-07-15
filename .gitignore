@@ -1,22 +1,51 @@
 # User-supplied ROMs and archives are never committed.
 *.sfc
 *.smc
+*.rom
 *.zip
+*.7z
 
 # Generated and local build products.
 build*/
 src/gen/
-snesrecomp
+snesrecomp/
 rom.cfg
 keybinds.ini
 config.local.ini
 saves/
 *.sav
+*.srm
+*.exe
+*.dll
+*.obj
+*.pdb
+*.ilk
+*.tlog
 *.bmp
 *.png
+*.jpg
+*.jpeg
 *.log
 *.out
 *.err
 *.dmp
 *.ram
 crash_report_*.json
+last_run_report.json
+
+# Release staging and locally packaged artifacts.
+release-stage/
+StarFoxSNESRecomp-windows-*.zip
+
+# IDE, operating-system, and tool caches.
+.vs/
+.vscode/
+*.vcxproj.user
+Thumbs.db
+.DS_Store
+__pycache__/
+*.pyc
+
+# Per-developer scratch and triage output.
+_*
+_triage/
