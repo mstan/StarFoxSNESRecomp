@@ -382,11 +382,11 @@ void StarFoxDrawPpuFrame(void) {
       for (unsigned output_x = 0; output_x < width; output_x++) {
         const int screen_x = (int)output_x - g_ws_extra;
         /* The native 224-pixel GSU view is windowed at x=16..239. Bridge its
-         * otherwise-black inset only in the 3D scene band; the lower HUD
-         * remains byte-for-byte the authentic centered render. */
+         * otherwise-black 16-pixel insets in both the 3D scene and the lower
+         * surround; preserve the authentic HUD contents at x=16..239. */
         const bool bridge_gsu_inset =
-            y < 160 && (screen_x >= 0 && screen_x < 16 ||
-                        screen_x >= 240 && screen_x < 256);
+            (screen_x >= 0 && screen_x < 16) ||
+            (screen_x >= 240 && screen_x < 256);
         if (screen_x >= 0 && screen_x < 256 && !bridge_gsu_inset)
           continue;
         if (y >= 160) {
