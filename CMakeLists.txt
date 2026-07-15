@@ -9,6 +9,8 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 option(STARFOX_ENABLE_LAUNCHER "Build the RmlUi pre-game launcher" ON)
+set(SNESRECOMP_BUILD_VERSION "dev" CACHE STRING
+    "Version recorded in Star Fox host and crash reports")
 set(STARFOX_LAUNCHER_SOURCES)
 if(STARFOX_ENABLE_LAUNCHER)
   # Keep the release self-contained: build the same vendored FreeType/RmlUi
@@ -85,6 +87,7 @@ if(STARFOX_ENABLE_LAUNCHER)
 endif()
 target_compile_definitions(StarFoxSNESRecomp PRIVATE
   SMW_DISABLE_LM=1 SYSTEM_VOLUME_MIXER_AVAILABLE=0
+  SNESRECOMP_BUILD_VERSION="${SNESRECOMP_BUILD_VERSION}"
   SNESRECOMP_TRACE=$<BOOL:${SNESRECOMP_ENABLE_TRACE}>
   SNESRECOMP_REVERSE_DEBUG=0)
 if(NOT MSVC)
