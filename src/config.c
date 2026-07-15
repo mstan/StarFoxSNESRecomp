@@ -394,6 +394,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.display_perf_title);
     } else if (StringEqualsNoCase(key, "DisableFrameDelay")) {
       return ParseBool(value, &g_config.disable_frame_delay);
+    } else if (StringEqualsNoCase(key, "SkipLauncher")) {
+      return ParseBool(value, &g_config.skip_launcher);
     } else if (StringEqualsNoCase(key, "EnableSnes9xOracle")) {
       return ParseBool(value, &g_config.enable_snes9x_oracle);
     }
@@ -467,4 +469,233 @@ void ParseConfigFile(const char *filename) {
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
   RegisterDefaultKeys();
+}
+
+void ConfigReloadKeyMap(const char *filename) {
+  memset(keymap_hash_first, 0, sizeof(keymap_hash_first));
+  free(keymap_hash);
+  keymap_hash = NULL;
+  keymap_hash_size = 0;
+  memset(has_keynameid, 0, sizeof(has_keynameid));
+  g_config.has_keyboard_controls = 0;
+
+  if (filename == NULL)
+    filename = "config.ini";
+  char *filedata = (char *)ReadWholeFile(filename, NULL);
+  if (filedata) {
+    char *iter = filedata, *p;
+    int in_keymap = 0;
+    while ((p = NextLineStripComments(&iter)) != NULL) {
+      if (*p == 0)
+        continue;
+      if (*p == '[') {
+        in_keymap = StringEqualsNoCase(p, "[KeyMap]");
+        continue;
+      }
+      if (!in_keymap)
+        continue;
+      char *v = SplitKeyValue(p);
+      if (v)
+        HandleIniConfig(0, p, v);
+    }
+    free(filedata);
+  }
+
+  for (int i = 1; i < countof(kKeyNameId); i++) {
+    if (!has_keynameid[i]) {
+      int size = kKeyNameId[i].size, k = kKeyNameId[i].id;
+      for (int j = 0; j < size; j++, k++)
+        KeyMapHash_Add(kDefaultKbdControls[k], k);
+    }
+  }
+}
+
+typedef struct CfgKV {
+  const char *section;
+  const char *key;
+  char val[128];
+  int done;
+} CfgKV;
+
+typedef struct CfgBuf {
+  char *p;
+  size_t len, cap;
+} CfgBuf;
+
+static void CfgBuf_AddN(CfgBuf *b, const char *s, size_t n) {
+  if (b->len + n + 1 > b->cap) {
+    b->cap = (b->len + n + 1) * 2;
+    b->p = (char *)realloc(b->p, b->cap);
+    if (!b->p) Die("realloc failure");
+  }
+  memcpy(b->p + b->len, s, n);
+  b->len += n;
+  b->p[b->len] = 0;
+}
+
+static void CfgBuf_Str(CfgBuf *b, const char *s) {
+  CfgBuf_AddN(b, s, strlen(s));
+}
+
+static void CfgBuf_EmitKV(CfgBuf *b, const CfgKV *kv) {
+  CfgBuf_Str(b, kv->key);
+  CfgBuf_Str(b, " = ");
+  CfgBuf_Str(b, kv->val);
+  CfgBuf_Str(b, "\n");
+}
+
+static void CfgFlushSection(CfgBuf *out, CfgKV *kvs, int n,
+                            const char *section) {
+  if (!section || !*section)
+    return;
+  for (int i = 0; i < n; i++) {
+    if (!kvs[i].done && StringEqualsNoCase(section, kvs[i].section)) {
+      CfgBuf_EmitKV(out, &kvs[i]);
+      kvs[i].done = 1;
+    }
+  }
+}
+
+static int CfgLineIsKey(const char *line, const char *key) {
+  const char *p = line;
+  while (*p == ' ' || *p == '\t') p++;
+  if (*p == '#') {
+    p++;
+    while (*p == ' ' || *p == '\t') p++;
+  }
+  const char *r = StringStartsWithNoCase(p, key);
+  if (!r)
+    return 0;
+  while (*r == ' ' || *r == '\t') r++;
+  return *r == '=';
+}
+
+void WriteConfigFile(const char *filename) {
+  if (filename == NULL)
+    filename = "config.ini";
+
+  CfgKV kvs[] = {
+    { "Graphics",   "OutputMethod" },
+    { "Graphics",   "WindowScale" },
+    { "Graphics",   "Fullscreen" },
+    { "Graphics",   "IgnoreAspectRatio" },
+    { "Graphics",   "Widescreen" },
+    { "Graphics",   "LinearFiltering" },
+    { "Sound",      "EnableAudio" },
+    { "Sound",      "AudioFreq" },
+    { "GamepadMap", "EnableGamepad1" },
+    { "GamepadMap", "EnableGamepad2" },
+    { "GamepadMap", "GamepadDeadzone" },
+    { "General",    "SkipLauncher" },
+  };
+  const int n = (int)countof(kvs);
+  const char *output_method =
+      g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
+      g_config.output_method == kOutputMethod_SDLSoftware ? "SDL-Software" :
+      "SDL";
+  snprintf(kvs[0].val, sizeof(kvs[0].val), "%s", output_method);
+  snprintf(kvs[1].val, sizeof(kvs[1].val), "%u",
+           g_config.window_scale ? g_config.window_scale : 3);
+  snprintf(kvs[2].val, sizeof(kvs[2].val), "%u", g_config.fullscreen);
+  snprintf(kvs[3].val, sizeof(kvs[3].val), "%d",
+           g_config.ignore_aspect_ratio ? 1 : 0);
+  snprintf(kvs[4].val, sizeof(kvs[4].val), "%s",
+           g_config.widescreen_extra ? "16:9" : "Off");
+  snprintf(kvs[5].val, sizeof(kvs[5].val), "%d",
+           g_config.linear_filtering ? 1 : 0);
+  snprintf(kvs[6].val, sizeof(kvs[6].val), "%d",
+           g_config.enable_audio ? 1 : 0);
+  snprintf(kvs[7].val, sizeof(kvs[7].val), "%u", g_config.audio_freq);
+  snprintf(kvs[8].val, sizeof(kvs[8].val), "%s",
+           g_config.enable_gamepad[0] ? "true" : "false");
+  snprintf(kvs[9].val, sizeof(kvs[9].val), "%s",
+           g_config.enable_gamepad[1] ? "true" : "false");
+  snprintf(kvs[10].val, sizeof(kvs[10].val), "%d",
+           g_config.gamepad_deadzone);
+  snprintf(kvs[11].val, sizeof(kvs[11].val), "%d",
+           g_config.skip_launcher ? 1 : 0);
+
+  char *data = NULL;
+  long size = 0;
+  FILE *f = fopen(filename, "rb");
+  if (f) {
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    data = (char *)malloc((size_t)(size > 0 ? size : 0) + 1);
+    if (data && size > 0 && fread(data, 1, (size_t)size, f) != (size_t)size)
+      size = 0;
+    if (data) data[size] = 0;
+    fclose(f);
+  }
+
+  CfgBuf out = {0};
+  char current[64] = "";
+  for (char *s = data; s && *s;) {
+    char *eol = strchr(s, '\n');
+    size_t line_len = eol ? (size_t)(eol - s) : strlen(s);
+    char line[2048];
+    size_t copy_len = line_len < sizeof(line) - 1 ? line_len : sizeof(line) - 1;
+    memcpy(line, s, copy_len);
+    line[copy_len] = 0;
+    if (copy_len && line[copy_len - 1] == '\r') line[copy_len - 1] = 0;
+    s = eol ? eol + 1 : s + line_len;
+
+    const char *trimmed = line;
+    while (*trimmed == ' ' || *trimmed == '\t') trimmed++;
+    if (*trimmed == '[') {
+      CfgFlushSection(&out, kvs, n, current);
+      const char *name = trimmed + 1;
+      int k = 0;
+      while (name[k] && name[k] != ']' && k < (int)sizeof(current) - 1) {
+        current[k] = name[k];
+        k++;
+      }
+      current[k] = 0;
+      CfgBuf_Str(&out, line);
+      CfgBuf_Str(&out, "\n");
+      continue;
+    }
+
+    int matched = 0;
+    for (int i = 0; *current && i < n; i++) {
+      if (!kvs[i].done && StringEqualsNoCase(current, kvs[i].section) &&
+          CfgLineIsKey(line, kvs[i].key)) {
+        CfgBuf_EmitKV(&out, &kvs[i]);
+        kvs[i].done = 1;
+        matched = 1;
+        break;
+      }
+    }
+    if (!matched) {
+      CfgBuf_Str(&out, line);
+      CfgBuf_Str(&out, "\n");
+    }
+  }
+
+  CfgFlushSection(&out, kvs, n, current);
+  for (int i = 0; i < n; i++) {
+    if (kvs[i].done)
+      continue;
+    CfgBuf_Str(&out, "\n[");
+    CfgBuf_Str(&out, kvs[i].section);
+    CfgBuf_Str(&out, "]\n");
+    for (int j = i; j < n; j++) {
+      if (!kvs[j].done &&
+          StringEqualsNoCase(kvs[j].section, kvs[i].section)) {
+        CfgBuf_EmitKV(&out, &kvs[j]);
+        kvs[j].done = 1;
+      }
+    }
+  }
+
+  FILE *out_file = fopen(filename, "wb");
+  if (out_file) {
+    if (out.p) fwrite(out.p, 1, out.len, out_file);
+    fclose(out_file);
+  } else {
+    fprintf(stderr, "Warning: unable to write config file %s\n", filename);
+  }
+  free(out.p);
+  free(data);
 }

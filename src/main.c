@@ -36,6 +36,9 @@
 #endif
 
 #include "launcher.h"
+#ifdef SNES_LAUNCHER
+#include "launcher/launcher_capi.h"
+#endif
 #include "keybinds.h"
 #include "host_report.h"
 
@@ -638,6 +641,11 @@ int main(int argc, char** argv) {
     framedump_dir = argv[1];
     argc -= 2, argv += 2;
   }
+  int force_launcher = 0;
+  if (argc >= 1 && strcmp(argv[0], "--launcher") == 0) {
+    force_launcher = 1;
+    argc--, argv++;
+  }
   ParseConfigFile(config_file);
   // Apply local overrides if present (gitignored). Lets a developer
   // mute audio etc. without touching the checked-in mmx.ini. Last
@@ -662,15 +670,123 @@ int main(int argc, char** argv) {
    *
    * The launcher auto-strips a 512-byte SMC copier header before hashing,
    * so headered and unheadered dumps both verify against the same hash. */
-  static char rom_path_buf[512];
+  static char rom_path_buf[1024];
+  /* Star Fox (USA) revision 2, verified unheadered 1 MiB ROM. */
+  static const uint8_t kStarFoxSha256[32] = {
+    0x82,0xe3,0x9d,0xfb,0xb3,0xe4,0xfe,0x5c,
+    0x28,0x04,0x4e,0x80,0x87,0x83,0x92,0x07,
+    0x0c,0x61,0x8b,0x29,0x8d,0xd5,0xa2,0x67,
+    0xe5,0xea,0x53,0xc8,0xf7,0x2c,0xc5,0x48,
+  };
+  int rom_resolved_by_launcher = 0;
+
+#ifdef SNES_LAUNCHER
   {
-    /* Star Fox (USA) revision 2, verified unheadered 1 MiB ROM. */
-    static const uint8_t kStarFoxSha256[32] = {
-      0x82,0xe3,0x9d,0xfb,0xb3,0xe4,0xfe,0x5c,
-      0x28,0x04,0x4e,0x80,0x87,0x83,0x92,0x07,
-      0x0c,0x61,0x8b,0x29,0x8d,0xd5,0xa2,0x67,
-      0xe5,0xea,0x53,0xc8,0xf7,0x2c,0xc5,0x48,
-    };
+    int headless = start_paused || script_file != NULL || framedump_dir != NULL;
+    int have_positional = argc >= 1 && argv[0] && argv[0][0] != '-' && argv[0][0];
+    const char *no_launcher = getenv("SNESRECOMP_NO_LAUNCHER");
+    int want_launcher = !headless && !have_positional && !(no_launcher && *no_launcher);
+
+    if (want_launcher && g_config.skip_launcher && !force_launcher) {
+      FILE *cached = fopen("rom.cfg", "r");
+      if (cached) {
+        if (fgets(rom_path_buf, sizeof(rom_path_buf), cached)) {
+          size_t len = strlen(rom_path_buf);
+          while (len && (rom_path_buf[len - 1] == '\r' ||
+                         rom_path_buf[len - 1] == '\n'))
+            rom_path_buf[--len] = 0;
+        }
+        fclose(cached);
+      }
+      FILE *probe = rom_path_buf[0] ? fopen(rom_path_buf, "rb") : NULL;
+      if (probe) {
+        fclose(probe);
+        rom_resolved_by_launcher = 1;
+        want_launcher = 0;
+      }
+    }
+
+    if (want_launcher) {
+      SnesLauncherCSettings settings;
+      memset(&settings, 0, sizeof(settings));
+      settings.output_method = g_config.output_method;
+      settings.window_scale = g_config.window_scale ? g_config.window_scale : 3;
+      settings.fullscreen = g_config.fullscreen;
+      settings.ignore_aspect = g_config.ignore_aspect_ratio;
+      settings.linear_filter = g_config.linear_filtering;
+      settings.widescreen = g_config.widescreen_extra != 0;
+      settings.widescreen_hud = 1;
+      settings.enable_audio = g_config.enable_audio;
+      settings.audio_freq = g_config.audio_freq;
+      settings.volume = 100;
+      settings.player_src[0] = g_config.enable_gamepad[0] ? 2 : 1;
+      settings.player_src[1] = g_config.enable_gamepad[1] ? 2 : 0;
+      int deadzone_percent = g_config.gamepad_deadzone * 100 / 32767;
+      settings.deadzone[0] = settings.deadzone[1] =
+          IntMax(0, IntMin(deadzone_percent, 100));
+      settings.skip_launcher = g_config.skip_launcher;
+
+      char initial_rom[1024] = {0};
+      FILE *cached = fopen("rom.cfg", "r");
+      if (cached) {
+        if (fgets(initial_rom, sizeof(initial_rom), cached)) {
+          size_t len = strlen(initial_rom);
+          while (len && (initial_rom[len - 1] == '\r' ||
+                         initial_rom[len - 1] == '\n'))
+            initial_rom[--len] = 0;
+        }
+        fclose(cached);
+      }
+
+      SnesLauncherCGameInfo game_info;
+      memset(&game_info, 0, sizeof(game_info));
+      game_info.name = "Star Fox";
+      game_info.region = "(USA, Rev 2)";
+      game_info.expected_crc = 0x8fc4e6d0u;
+      game_info.has_expected_crc = 1;
+      game_info.known_sha256 = (const uint8_t (*)[32])&kStarFoxSha256;
+      game_info.num_known_sha256 = 1;
+      game_info.widescreen_supported = 1;
+      game_info.msu1_supported = 0;
+      game_info.config_path = config_file ? config_file : "config.ini";
+
+      char assets_dir[1024] = "launcher";
+      snesrecomp_exe_dir_path("launcher", assets_dir, sizeof(assets_dir));
+      int action = snes_launcher_run_window(
+          "Star Fox - Launcher", &settings, &game_info, assets_dir,
+          initial_rom, rom_path_buf, sizeof(rom_path_buf));
+      if (action == 1)
+        return 0;
+      if (action == 0) {
+        g_config.output_method = (uint8)settings.output_method;
+        g_config.window_scale = (uint8)settings.window_scale;
+        g_config.fullscreen = (uint8)settings.fullscreen;
+        g_config.ignore_aspect_ratio = settings.ignore_aspect != 0;
+        g_config.linear_filtering = settings.linear_filter != 0;
+        g_config.widescreen_extra = settings.widescreen ? 71 : 0;
+        g_config.enable_audio = settings.enable_audio != 0;
+        g_config.audio_freq = (uint16)settings.audio_freq;
+        g_config.enable_gamepad[0] = settings.player_src[0] == 2;
+        g_config.enable_gamepad[1] = settings.player_src[1] == 2;
+        g_config.gamepad_deadzone =
+            IntMax(1, IntMin(settings.deadzone[0] * 32767 / 100, 32767));
+        g_config.skip_launcher = settings.skip_launcher != 0;
+        WriteConfigFile(config_file);
+        ConfigReloadKeyMap(config_file);
+        if (rom_path_buf[0]) {
+          FILE *out = fopen("rom.cfg", "w");
+          if (out) {
+            fprintf(out, "%s\n", rom_path_buf);
+            fclose(out);
+          }
+          rom_resolved_by_launcher = 1;
+        }
+      }
+    }
+  }
+#endif
+
+  if (!rom_resolved_by_launcher) {
     char *la_argv[2] = {
       (char *)"starfox",
       (char *)((argc >= 1 && argv[0]) ? argv[0] : "")
@@ -1450,6 +1566,7 @@ static const char kDefaultSmwIniContent[] =
   "# Disable the SDL_Delay that happens each frame (slightly better\n"
   "# perf if your display is set to exactly 60hz)\n"
   "DisableFrameDelay = 0\n"
+  "SkipLauncher = 0\n"
   "\n"
   "[Graphics]\n"
   "# Window size (Auto or WidthxHeight)\n"
@@ -1469,6 +1586,7 @@ static const char kDefaultSmwIniContent[] =
   "\n"
   "# Remove the sprite limits per scan line\n"
   "NoSpriteLimits = 1\n"
+  "Widescreen = 16:9\n"
   "\n"
   "[Sound]\n"
   "EnableAudio = 1\n"

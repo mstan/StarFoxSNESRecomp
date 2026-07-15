@@ -56,6 +56,9 @@ typedef struct Config {
   uint8 widescreen_extra;
   bool display_perf_title;
   bool disable_frame_delay;
+  /* Persisted by the RmlUi dashboard. --launcher overrides it so users can
+   * always get back to settings after choosing direct boot. */
+  bool skip_launcher;
 
   /* Oracle-build only. When false, main.c skips snes_oracle_init_default
    * and calls snes_oracle_set_disabled_by_game so the dispatcher refuses
@@ -101,5 +104,7 @@ enum {
 extern Config g_config;
 
 void ParseConfigFile(const char *filename);
+void ConfigReloadKeyMap(const char *filename);
+void WriteConfigFile(const char *filename);
 int FindCmdForSdlKey(SDL_Keycode code, SDL_Keymod mod);
 int FindCmdForGamepadButton(int button, uint32 modifiers);

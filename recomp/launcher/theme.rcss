@@ -1,0 +1,70 @@
+/* Star Fox launcher skin: deep space, Cornerian steel, and the warm
+ * orange-red accents used by the game's logo and cockpit instruments. */
+body {
+	color: #dcecff;
+	background-color: #02060c;
+}
+
+.brand-name, .game-title, .foot-name { color: #fff4d4; }
+.brand-sep { color: #294967; }
+.brand-sub, .game-region, .help, .sub-text { color: #809bb3; }
+.eyebrow, .sub-title { color: #f2b84b; }
+
+.panel {
+	background-color: #08131f;
+	border-color: #1c3b57;
+}
+.boxart { border-color: #315b7d; }
+.kv .k { color: #63829d; }
+.kv .v, .foot-name { color: #c8dff2; }
+
+button, .ddbtn, .ddsel, .ddsel selectbox {
+	background-color: #0b1b2b;
+	border-color: #294e6b;
+	color: #dcecff;
+}
+button:hover, .ddbtn:hover, .ddsel:hover,
+button:focus, .ddsel:focus {
+	background-color: #122b42;
+	border-color: #e06a35;
+}
+.ddsel selectbox option:checked {
+	background-color: #4b211b;
+	color: #fff4d4;
+}
+
+.subpanel {
+	background-color: #0b1827;
+	border-color: #274e70;
+}
+.subpanel.warn {
+	background-color: #24150c;
+	border-color: #7a4422;
+}
+
+.footer { border-top-color: #1c3b57; }
+#play, .modal-confirm {
+	background-color: #b6422b;
+	border-color: #e06a35;
+	color: #fff8e8;
+}
+#play:hover, #play:focus,
+.modal-confirm:hover, .modal-confirm:focus {
+	background-color: #d85b31;
+	border-color: #f2b84b;
+}
+
+.switch.on { background-color: #c94c2e; }
+.switch:focus { border-color: #f2b84b; }
+button.rb-chip.rb-chip--scan {
+	background-color: #3b1d18;
+	border-color: #e06a35;
+	color: #f2b84b;
+}
+
+.modal-box {
+	background-color: #08131f;
+	border-color: #315b7d;
+}
+.modal-title { color: #fff4d4; }
+.modal-text, .skip-lbl, .set-lbl { color: #a9c2d6; }
