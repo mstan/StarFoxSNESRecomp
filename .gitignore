@@ -9,6 +9,7 @@ src/gen/
 snesrecomp
 rom.cfg
 keybinds.ini
+config.local.ini
 saves/
 *.sav
 *.bmp

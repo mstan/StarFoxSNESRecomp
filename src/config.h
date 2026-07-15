@@ -50,6 +50,10 @@ typedef struct Config {
   bool autosave;
   bool extend_y;
   bool no_sprite_limits;
+  /* Extra logical SNES pixels rendered on each side. 0 is the authentic
+   * 256-pixel viewport; 71 produces 398x224, the nearest even-centered 16:9
+   * viewport. The renderer currently supports at most 95 per side. */
+  uint8 widescreen_extra;
   bool display_perf_title;
   bool disable_frame_delay;
 

@@ -349,6 +349,26 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.linear_filtering);
     } else if (StringEqualsNoCase(key, "NoSpriteLimits")) {
       return ParseBool(value, &g_config.no_sprite_limits);
+    } else if (StringEqualsNoCase(key, "Widescreen")) {
+      if (StringEqualsNoCase(value, "Off") ||
+          StringEqualsNoCase(value, "4:3")) {
+        g_config.widescreen_extra = 0;
+        return true;
+      }
+      if (StringEqualsNoCase(value, "16:9")) {
+        /* 224 * 16 / 9 rounds to 398; (398 - 256) / 2 = 71. */
+        g_config.widescreen_extra = 71;
+        return true;
+      }
+      char *end = NULL;
+      long extra = strtol(value, &end, 10);
+      if (end != value && *end == '\0' && extra >= 0 && extra <= 95) {
+        g_config.widescreen_extra = (uint8)extra;
+        return true;
+      }
+      fprintf(stderr,
+              "Widescreen must be Off, 4:3, 16:9, or 0-95 extra pixels per side\n");
+      return false;
     } else if (StringEqualsNoCase(key, "Shader")) {
       g_config.shader = *value ? value : NULL;
       return true;

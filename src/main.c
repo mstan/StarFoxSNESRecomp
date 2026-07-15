@@ -20,6 +20,7 @@
 #endif
 
 #include "snes/ppu.h"
+#include "widescreen.h"
 
 #include "types.h"
 #include "starfox_rtl.h"
@@ -66,7 +67,11 @@ bool g_new_ppu = true;
 
 struct SpcPlayer *g_spc_player;
 
-static uint8_t g_my_pixels[256 * 4 * 240];
+static uint8_t g_my_pixels[(256 + 2 * kWsExtraMax) * 4 * 240];
+
+/* Shared widescreen contract. The engine remains inert when these are zero. */
+bool g_ws_active;
+int g_ws_extra;
 
 
 enum {
@@ -316,8 +321,8 @@ static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *pt, v
 
 void RtlDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
   g_rtl_game_info->draw_ppu_frame();
-  for (size_t y = 0, y_end = g_snes_height; y < y_end; y++)
-    memcpy((uint8 *)pixel_buffer + y * pitch, g_my_pixels + y * 256 * 4, 256 * 4);
+  RtlWidescreenPresent(pixel_buffer, pitch, g_my_pixels, g_snes_width,
+                       g_snes_height);
 }
 
 #ifdef ENABLE_ORACLE_BACKEND
@@ -717,7 +722,9 @@ int main(int argc, char** argv) {
   }
 
   g_gamepad[0].joystick_id = g_gamepad[1].joystick_id = -1;
-  g_snes_width = 256;
+  g_ws_extra = IntMin(g_config.widescreen_extra, kWsExtraMax);
+  g_ws_active = g_ws_extra != 0;
+  g_snes_width = 256 + 2 * g_ws_extra;
   g_snes_height = 224;// (g_config.extend_y ? 240 : 224);
   g_ppu_render_flags = g_config.new_renderer * kPpuRenderFlags_NewRenderer |
     g_config.extend_y * kPpuRenderFlags_Height240 |
@@ -904,7 +911,7 @@ error_reading:;
     host_report_breadcrumb("audio disabled in config");
   }
 
-  PpuBeginDrawing(g_ppu, g_my_pixels, 256 * 4, 0);
+  PpuBeginDrawing(g_ppu, g_my_pixels, g_snes_width * 4, 0);
 
   MkDir("saves");
 
