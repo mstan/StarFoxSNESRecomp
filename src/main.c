@@ -748,6 +748,8 @@ int main(int argc, char** argv) {
       game_info.num_known_sha256 = 1;
       game_info.widescreen_supported = 1;
       game_info.msu1_supported = 0;
+      game_info.sram_path = NULL;    /* Star Fox cart has no battery SRAM — hide SAVES */
+      game_info.num_players = 1;     /* single-player — hide the Player 2 row */
       game_info.config_path = config_file ? config_file : "config.ini";
 
       char assets_dir[1024] = "launcher";
