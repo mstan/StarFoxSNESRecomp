@@ -12,7 +12,7 @@ Example:
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Version,
-  [string]$BuildDir = 'build-release',
+  [string]$BuildDir = 'build-recompui',
   [string]$RuntimeBinDir = 'C:\msys64\mingw64\bin'
 )
 
@@ -20,13 +20,13 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $build = Join-Path $root $BuildDir
 $exe = Join-Path $build 'StarFoxSNESRecomp.exe'
-$launcher = Join-Path $build 'launcher'
+$assets = Join-Path $build 'assets'
 
 if (-not (Test-Path -LiteralPath $exe)) {
   throw "Release executable missing: $exe"
 }
-if (-not (Test-Path -LiteralPath $launcher)) {
-  throw "Launcher assets missing: $launcher"
+if (-not (Test-Path -LiteralPath $assets)) {
+  throw "recomp-ui launcher assets/ missing: $assets"
 }
 
 $out = Join-Path $root 'release-stage'
@@ -53,7 +53,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 Copy-Item -LiteralPath $exe -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'config.ini') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
-Copy-Item -LiteralPath $launcher -Destination $stage -Recurse
+Copy-Item -LiteralPath $assets -Destination $stage -Recurse
 
 $runtimeDlls = @(
   'SDL2.dll',
