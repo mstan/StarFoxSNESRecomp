@@ -8,7 +8,6 @@
 # Generated and local build products.
 build*/
 src/gen/
-snesrecomp
 rom.cfg
 keybinds.ini
 config.local.ini

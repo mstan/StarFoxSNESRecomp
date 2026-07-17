@@ -36,8 +36,17 @@
 #endif
 
 #include "launcher.h"
-#ifdef SNES_LAUNCHER
-#include "launcher/launcher_capi.h"
+#if defined(SNES_LAUNCHER) || defined(RECOMP_LAUNCHER)
+#if defined(RECOMP_LAUNCHER)
+/* Shared recomp-ui launcher (F:\Projects\recomp-ui) — the console-agnostic
+ * extraction of launcher_ng, consumed as a junction/submodule. Built with
+ * -DMMX_RECOMP_UI=ON; its recomp_ui.cmake defines RECOMP_LAUNCHER. Star Fox
+ * drives it as the SNES profile (launcher_profile_apply("snes", ...)). */
+#include "recomp_launcher.h"   /* recomp_launcher_run_window() */
+#include "launcher_profile.h"  /* launcher_profile_apply("snes", &gi) — SNES identity */
+#elif defined(SNES_LAUNCHER)
+#include "launcher/launcher_capi.h"     /* in-tree launcher_ng (snes_launcher_run_window) */
+#endif
 #endif
 #include "keybinds.h"
 #include "host_report.h"
@@ -680,7 +689,7 @@ int main(int argc, char** argv) {
   };
   int rom_resolved_by_launcher = 0;
 
-#ifdef SNES_LAUNCHER
+#if defined(SNES_LAUNCHER) || defined(RECOMP_LAUNCHER)
   {
     int headless = start_paused || script_file != NULL || framedump_dir != NULL;
     int have_positional = argc >= 1 && argv[0] && argv[0][0] != '-' && argv[0][0];
@@ -707,7 +716,11 @@ int main(int argc, char** argv) {
     }
 
     if (want_launcher) {
+#if defined(RECOMP_LAUNCHER)
+      RecompLauncherCSettings settings;   /* recomp-ui ABI: same base fields as SnesLauncher, plus additive */
+#else
       SnesLauncherCSettings settings;
+#endif
       memset(&settings, 0, sizeof(settings));
       settings.output_method = g_config.output_method;
       settings.window_scale = g_config.window_scale ? g_config.window_scale : 3;
@@ -738,25 +751,44 @@ int main(int argc, char** argv) {
         fclose(cached);
       }
 
+#if defined(RECOMP_LAUNCHER)
+      RecompLauncherCGameInfo game_info;
+      memset(&game_info, 0, sizeof(game_info));
+      /* SNES system identity (theme=CRT, platform="SUPER NINTENDO", rom_noun
+       * "ROM", widescreen_supported=1); Star Fox overrides the per-game
+       * specifics below. One profile call keeps the identity from drifting
+       * across SNES titles, exactly as the PSX host does for its. */
+      launcher_profile_apply("snes", &game_info);
+#else
       SnesLauncherCGameInfo game_info;
       memset(&game_info, 0, sizeof(game_info));
+#endif
       game_info.name = "Star Fox";
       game_info.region = "(USA, Rev 2)";
       game_info.expected_crc = 0x8fc4e6d0u;
       game_info.has_expected_crc = 1;
       game_info.known_sha256 = (const uint8_t (*)[32])&kStarFoxSha256;
       game_info.num_known_sha256 = 1;
-      game_info.widescreen_supported = 1;
+      game_info.widescreen_supported = 0;  /* WS not fully built for Star Fox yet — hide the toggle */
       game_info.msu1_supported = 0;
       game_info.sram_path = NULL;    /* Star Fox cart has no battery SRAM — hide SAVES */
       game_info.num_players = 1;     /* single-player — hide the Player 2 row */
       game_info.config_path = config_file ? config_file : "config.ini";
 
+#if defined(RECOMP_LAUNCHER)
+      /* cwd is anchored to the exe dir (snesrecomp_anchor_to_exe_dir above),
+       * and recomp_ui.cmake stages assets to <exe>/assets, so "." resolves
+       * assets correctly. */
+      int action = recomp_launcher_run_window(
+          "Star Fox - Launcher", &settings, &game_info, ".",
+          initial_rom, rom_path_buf, sizeof(rom_path_buf));
+#else
       char assets_dir[1024] = "launcher";
       snesrecomp_exe_dir_path("launcher", assets_dir, sizeof(assets_dir));
       int action = snes_launcher_run_window(
           "Star Fox - Launcher", &settings, &game_info, assets_dir,
           initial_rom, rom_path_buf, sizeof(rom_path_buf));
+#endif
       if (action == 1)
         return 0;
       if (action == 0) {
