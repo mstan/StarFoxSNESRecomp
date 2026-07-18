@@ -99,7 +99,7 @@ supported preset.
 ## Building from source
 
 Prerequisites are CMake 3.16+, Ninja or another CMake-supported build system,
-Python 3.9+, SDL2, and OpenGL development files.
+Python 3.9+, rustup, SDL2, and OpenGL development files.
 
 ```bash
 git clone https://github.com/mstan/StarFoxSNESRecomp
@@ -130,9 +130,12 @@ cmake --build build
 ./build/StarFoxSNESRecomp
 ```
 
+Regeneration builds and requires the fast native analyzer by default. Set
+`SNESRECOMP_ANALYSIS_BACKEND=python` only to use the slower reference path.
+
 `src/gen/` is generated locally from the user's ROM and must never be
 committed. The exact framework revision expected by this project is recorded
-in `snesrecomp.pin`.
+by the `snesrecomp` gitlink.
 
 ## Repository layout
 
