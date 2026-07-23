@@ -56,7 +56,7 @@ typedef struct Config {
   uint8 widescreen_extra;
   bool display_perf_title;
   bool disable_frame_delay;
-  /* Persisted by the RmlUi dashboard. --launcher overrides it so users can
+  /* Persisted by the shared dashboard. --launcher overrides it so users can
    * always get back to settings after choosing direct boot. */
   bool skip_launcher;
 
