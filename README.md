@@ -104,7 +104,7 @@ Python 3.9+, rustup, SDL2, and OpenGL development files.
 ```bash
 git clone https://github.com/mstan/StarFoxSNESRecomp
 git clone https://github.com/mstan/snesrecomp
-git -C snesrecomp submodule update --init lib/RmlUi lib/freetype
+git clone https://github.com/mstan/recomp-ui
 cd StarFoxSNESRecomp
 ```
 
