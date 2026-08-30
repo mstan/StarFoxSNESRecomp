@@ -5,11 +5,11 @@
 Star Fox native widescreen is adapted from `DisplayMode` and renderer work in
 kandowontu's Star Fox Enhanced decomp:
 <https://github.com/kandowontu/starfox-enhanced>. Star Fox Enhanced is the
-authoritative full-experience project; StarFoxSNESRecomp's contribution is the
-development reference integration layer that maps retail Star Fox runtime state
-into that separate native renderer model. Credit for the widescreen renderer
-design, reference implementation, and presentation frame-rate behavior belongs
-to the Star Fox Enhanced author and project.
+authoritative Star Fox (SNES) PC port project; StarFoxSNESRecomp's contribution
+is the development reference integration layer that maps retail Star Fox runtime
+state into that separate native renderer model. Credit for the widescreen
+renderer design, reference implementation, and presentation frame-rate behavior
+belongs to the Star Fox Enhanced author and project.
 
 Star Fox widescreen is no longer a Star Fox-specific modification of the stock
 SNES renderer. The stock path renders the authentic 256x224 picture. Wider
