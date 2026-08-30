@@ -3,7 +3,7 @@
 This document records what is currently useful from kandowontu's Star Fox
 Enhanced decomp, <https://github.com/kandowontu/starfox-enhanced>, for
 StarFoxSNESRecomp and, where applicable, for the shared snesrecomp framework.
-Star Fox Enhanced remains the authoritative full-experience project and
+Star Fox Enhanced remains the authoritative Star Fox (SNES) PC port project and
 reference implementation.
 
 ## Current local baseline

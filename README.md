@@ -1,5 +1,5 @@
 > **Development reference status and credit:** The authoritative Star Fox
-> Enhanced project is kandowontu's
+> (SNES) PC port project is kandowontu's
 > [starfox-enhanced](https://github.com/kandowontu/starfox-enhanced), a decomp
 > project and the reference implementation for the custom renderer behavior
 > adapted here. This StarFoxSNESRecomp repository is for development reference
