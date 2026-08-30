@@ -4,7 +4,7 @@
 > project and the reference implementation for the custom renderer behavior
 > adapted here. This StarFoxSNESRecomp repository is for development reference
 > purposes and is not intended to be a production release. Users seeking the
-> full Star Fox Enhanced experience should use
+> full Star Fox experience should use
 > [starfox-enhanced](https://github.com/kandowontu/starfox-enhanced). I am
 > grateful for kandowontu's work and credit that project for the reference
 > implementation behind this repo's opt-in native widescreen renderer and
