@@ -68,7 +68,7 @@ Implementation notes:
    gained from pickups.
 4. The shared recomp-ui Mods view exposes this setting through the built-in
    Star Fox Enhanced mod provider. It still needs route and transition audits
-   before it should be treated as parity with the source port.
+   before it should be treated as parity with the Star Fox Enhanced decomp.
 
 This is feasible but higher-risk than crosshair color because it mutates game
 state.
@@ -166,9 +166,9 @@ Implementation notes:
 3. `90`, `120`, `240`, `360`, and `480` are accepted and use duplicate-present
    scheduling from the newest retained final frame. SDL/OpenGL vsync is disabled
    for these modes so extra presents are not pinned to a 60 Hz swap interval.
-4. High-FPS modes still do not implement Enhanced's transform interpolation;
-   repeated presentations are real, but object/camera motion is not smoothed
-   between simulated SNES frames yet.
+4. Enhanced-mode native shape poses use presentation interpolation to reduce
+   object jitter between simulated SNES frames. Remaining parity work is focused
+   on transition artifacts and particle/effect presentation.
 
 ## Framework candidate
 
@@ -181,10 +181,10 @@ local captures. The first renderer-facing extension is
 host presentation buffer only when the game explicitly enables it. Star Fox's
 current implementation owns widescreen output, not a PPU margin supplement. The
 native bridge now builds directly against Star Fox Enhanced's
-`BackgroundRenderer` and `SpriteRenderer` for BG/OAM output. The previous local
-C Super FX overlay is disabled by default because it is not faithful enough for
-normal output; full `SoftwareRenderer` parity, text, particles, cockpit HUD, and
-presentation effects still remain.
+`BackgroundRenderer`, `SpriteRenderer`, and `SoftwareRenderer` for native
+BG/OAM and shape output. The previous local C Super FX overlay is not part of
+normal output. Remaining parity work is focused on transition artifacts,
+bottom-edge presentation glitches, particles, and effects.
 
 The concrete follow-up is a small title-neutral presentation diagnostics facade
 that reports:
