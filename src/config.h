@@ -23,6 +23,9 @@ enum {
   kKeys_WindowSmaller,
   kKeys_DisplayPerf,
   kKeys_ToggleRenderer,
+  kKeys_PresentationDebug,
+  kKeys_PresentationStepForward,
+  kKeys_PresentationStepBack,
   kKeys_VolumeUp,
   kKeys_VolumeDown,
   kKeys_Total,
@@ -34,10 +37,24 @@ enum {
   kOutputMethod_OpenGL,
 };
 
+enum {
+  kCrosshairColor_Original,
+  kCrosshairColor_White,
+  kCrosshairColor_Green,
+  kCrosshairColor_Blue,
+  kCrosshairColor_Red,
+  kCrosshairColor_Yellow,
+  kCrosshairColor_Cyan,
+  kCrosshairColor_Magenta,
+  kCrosshairColor_Orange,
+  kCrosshairColor_Count,
+};
+
 typedef struct Config {
   int window_width;
   int window_height;
   bool new_renderer;
+  bool enhanced_renderer;
   bool ignore_aspect_ratio;
   uint8 fullscreen;
   uint8 window_scale;
@@ -51,8 +68,21 @@ typedef struct Config {
   bool no_sprite_limits;
   /* Extra logical SNES pixels rendered on each side. 0 is the authentic
    * 256-pixel viewport; 71 produces 398x224, the nearest even-centered 16:9
-   * viewport. The renderer currently supports at most 95 per side. */
-  uint8 widescreen_extra;
+   * viewport. Wider Enhanced-style modes use larger host-side margins. */
+  uint16 widescreen_extra;
+  bool widescreen_hud;
+  uint8 widescreen_hud_oam_first_slot;
+  uint8 widescreen_hud_oam_slots;
+  uint8 widescreen_hud_oam_height;
+  uint8 widescreen_hud_left_end;
+  uint8 widescreen_hud_right_start;
+  uint8 widescreen_hud_bg_y0;
+  uint8 widescreen_hud_bg_y1;
+  uint8 crosshair_color;
+  bool god_mode;
+  bool god_nuke;
+  uint16 presentation_fps;
+  bool show_fps;
   bool display_perf_title;
   bool disable_frame_delay;
   /* Persisted by the shared dashboard. --launcher overrides it so users can

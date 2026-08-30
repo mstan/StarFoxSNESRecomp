@@ -38,7 +38,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
   SDL_GLContext context = SDL_GL_CreateContext(window);
   (void)context;
 
-  SDL_GL_SetSwapInterval(1);
+  SDL_GL_SetSwapInterval(g_config.presentation_fps > 60 ? 0 : 1);
   ogl_LoadFunctions();
 
   if (!ogl_IsVersionGEQ(3, 3))

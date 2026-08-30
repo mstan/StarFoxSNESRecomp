@@ -18,6 +18,8 @@ if [ "$ANALYSIS_BACKEND" = native ]; then
   "$PYTHON" "$SNESRECOMP_ROOT/tools/build_native_analyzer.py"
 fi
 
+"$PYTHON" tools/ingest_starfox_enhanced_symbols.py --allow-missing
+
 test -f starfox.sfc || { echo "stage verified starfox.sfc first" >&2; exit 1; }
 # Every declared function is a static-analysis root. Unprovable variants still
 # fall back to the interpreter; --cfg-roots only prevents declared coverage

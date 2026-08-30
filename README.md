@@ -17,8 +17,9 @@ behavior but must not replace or diverge from it.
 
 The game boots and its attract sequence, menus, route selection, training, and
 gameplay have passed basic interactive testing. The project also includes an
-opt-in expanded viewport, with 16:9 as the current validated widescreen preset.
-Authentic 4:3 output remains available.
+opt-in separate native renderer adapted from Star Fox Enhanced for widened
+presentation, with 16:9, 21:9, and 32:9 presets under active validation.
+Authentic 4:3 output remains available and does not use the Enhanced renderer.
 
 Longer play sessions, additional routes, save-state behavior, and non-Windows
 builds still need more coverage before the project should be described as
@@ -81,23 +82,65 @@ in `config.ini`:
 | Turbo / fast-forward | Tab |
 | FPS / performance readout | F |
 | Toggle PPU renderer | R |
+| Presentation debugger | Ctrl+F5 |
+| Presentation step forward | Ctrl+F6 |
+| Presentation step back | Ctrl+F7 |
 | Window size | Ctrl+Up / Ctrl+Down |
 | Volume | Shift+= / Shift+- |
 
 ## Widescreen
 
-Set `Widescreen` in `config.ini` to one of the following:
+Widescreen output is an opt-in separate native renderer adapted from
+`DisplayMode` and renderer work in kandowontu's
+[starfox-enhanced](https://github.com/kandowontu/starfox-enhanced). Credit for
+the widescreen renderer design and reference implementation belongs to the Star
+Fox Enhanced author and project; this repo integrates that model with the
+retail Star Fox recomp runtime.
 
-- `Off` for the original 4:3 presentation.
-- `16:9` for the tested expanded viewport.
-- An integer from `0` through `95` for a custom number of extra pixels per
-  side.
+Enable `EnhancedRenderer = 1`, then set `DisplayMode` in `config.ini` to one of
+the following fixed modes:
 
-Full 21:9 currently exceeds the renderer's OAM-safe capacity and is not a
-supported preset.
+- `0`/`4:3` for the original presentation width.
+- `1`/`16:9` for widescreen.
+- `2`/`16:10` for a narrower expanded viewport.
+- `3`/`21:9` for ultrawide.
+- `4`/`32:9` for super-ultrawide.
+
+`Widescreen` remains accepted as a compatibility alias, including integer extra
+pixels per side, but Star Fox stock rendering remains 4:3. Wider output is only
+used by the Enhanced native renderer path.
 
 See [docs/TRUE_WIDESCREEN.md](docs/TRUE_WIDESCREEN.md) for the rendering
 model, validation notes, and the remaining spawn/culling audit.
+
+The launcher Mods view exposes the Enhanced renderer and fixed display modes.
+An adaptive display mode is not implemented yet.
+
+## Enhanced-Derived Mods
+
+Set `CrosshairColor` in `config.ini` to `Original`, `White`, `Green`, `Blue`,
+`Red`, `Yellow`, `Cyan`, `Magenta`, or `Orange`. `Original` preserves the
+retail palette; the other options apply a presentation-only tint to the OBJ
+crosshair palette during frame rendering and restore emulated CGRAM before the
+next simulation step. The same setting also redirects the Super FX cockpit HUD
+triangle color through the bright crosshair palette entry for the current
+simulation frame, then restores `M_HUDCOLOUR`.
+
+The `[Features]` section also exposes `GodMode` and `GodNuke`. `GodMode = 1`
+reasserts the Enhanced-derived no-collision flag and keeps Nova Bombs at a
+floor of three during active gameplay. With `GodNuke = 1`, hold R while firing
+a Nova Bomb with A to arm the newly created nuke for the Enhanced-style screen
+clear, including the protected boss-shape exceptions from the reference port.
+
+Set `ShowFPS = 1` in `[General]` to start with the live on-screen FPS readout
+enabled. Like Enhanced, it reports completed presentations in short samples.
+The `F` hotkey still toggles it at runtime.
+
+Set `PresentationFPS` to `20`, `30`, `60`, `90`, `120`, `240`, `360`, or
+`480` to choose the host presentation cadence. These modes keep SNES
+simulation cadence unchanged. Rates below 60 skip presentation draws; rates
+above 60 duplicate the newest completed presentation with vsync disabled. The
+high-FPS modes do not yet include Enhanced's transform interpolation.
 
 ## Building from source
 
@@ -105,11 +148,22 @@ Prerequisites are CMake 3.16+, Ninja or another CMake-supported build system,
 Python 3.9+, rustup, SDL2, and OpenGL development files.
 
 ```bash
-git clone https://github.com/mstan/StarFoxSNESRecomp
+git clone --recurse-submodules https://github.com/mstan/StarFoxSNESRecomp
 git clone https://github.com/mstan/snesrecomp
 git clone https://github.com/mstan/recomp-ui
 cd StarFoxSNESRecomp
 ```
+
+If you cloned without `--recurse-submodules`, initialize the reference sources
+before using the comparison tools:
+
+```bash
+git submodule update --init --recursive
+```
+
+For bounded validation runs, pass `--frames N` after any `--script` or
+`--framedump` arguments. This exits cleanly after `N` simulated frames and keeps
+launcher UI disabled for automated captures.
 
 Make `snesrecomp/` point to the sibling framework checkout. On macOS or Linux:
 
@@ -150,6 +204,7 @@ by the `snesrecomp` gitlink.
 | `docs/` | Reference-source provenance and development documentation. |
 | `snesrecomp/` | Junction or symlink to the sibling framework checkout. |
 | `third_party/` | Vendored dependencies retaining their own licenses. |
+| `third_party/starfox-enhanced/` | Pinned reference-only source port used for comparison and symbol provenance. |
 | `config.ini` | Runtime graphics, audio, controller, and hotkey settings. |
 | `recomp/launcher/` | Star Fox launcher theme and North American cover thumbnail. |
 | `tools/make_release.ps1` | Packages a completed MinGW release build and its runtime DLLs. |
@@ -160,6 +215,12 @@ Addresses and annotations are checked against the exact-version
 [StarFoxDisassembly](https://github.com/SpyderTL/StarFoxDisassembly) reference.
 See [docs/REFERENCE_SOURCES.md](docs/REFERENCE_SOURCES.md) for its pinned commit
 and usage constraints.
+
+[Star Fox Enhanced](https://github.com/kandowontu/starfox-enhanced) is pinned as
+a reference-only submodule for symbol inventory, architecture comparison, and
+portable mod research. See
+[docs/STARFOX_ENHANCED_COMPARISON.md](docs/STARFOX_ENHANCED_COMPARISON.md) for
+the current comparison notes and transfer candidates.
 
 ## License
 

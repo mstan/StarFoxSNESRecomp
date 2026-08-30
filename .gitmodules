@@ -4,3 +4,6 @@
 [submodule "recomp-ui"]
 	path = recomp-ui
 	url = https://github.com/mstan/recomp-ui.git
+[submodule "third_party/starfox-enhanced"]
+	path = third_party/starfox-enhanced
+	url = https://github.com/kandowontu/starfox-enhanced.git

@@ -2,6 +2,7 @@
 #include "types.h"
 #include <stdio.h>
 #include <string.h>
+#include "widescreen.h"
 #include "desktop/sdl_compat.h"
 #include "util.h"
 
@@ -30,8 +31,8 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   _(SDLK_F1), _(SDLK_F2), _(SDLK_F3), _(SDLK_F4), _(SDLK_F5), _(SDLK_F6), _(SDLK_F7), _(SDLK_F8), _(SDLK_F9), _(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
   // SaveState
   S(SDLK_F1), S(SDLK_F2), S(SDLK_F3), S(SDLK_F4), S(SDLK_F5), S(SDLK_F6), S(SDLK_F7), S(SDLK_F8), S(SDLK_F9), S(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
-  // Fullscreen, Reset, Pause, PauseDimmed, Turbo, WindowBigger, WindowSmaller, DisplayPerf, ToggleRenderer
-  A(SDLK_RETURN), C(SDLK_r), S(SDLK_p), _(SDLK_p), _(SDLK_TAB), N, N, _(SDLK_f), _(SDLK_r),
+  // Fullscreen, Reset, Pause, PauseDimmed, Turbo, WindowBigger, WindowSmaller, DisplayPerf, ToggleRenderer, PresentationDebug, PresentationStepForward, PresentationStepBack
+  A(SDLK_RETURN), C(SDLK_r), S(SDLK_p), _(SDLK_p), _(SDLK_TAB), N, N, _(SDLK_f), _(SDLK_r), C(SDLK_F5), C(SDLK_F6), C(SDLK_F7),
   // VolumeUp VolumeDown
   0, 0,
 };
@@ -53,7 +54,9 @@ static const KeyNameId kKeyNameId[] = {
   M(Controls), M(ControlsP2),
   M(Load), M(Save),
   S(Fullscreen), S(Reset),
-  S(Pause), S(PauseDimmed), S(Turbo), S(WindowBigger), S(WindowSmaller), S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
+  S(Pause), S(PauseDimmed), S(Turbo), S(WindowBigger), S(WindowSmaller),
+  S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
+  S(PresentationDebug), S(PresentationStepForward), S(PresentationStepBack),
 };
 #undef S
 #undef M
@@ -288,6 +291,141 @@ static int GetIniSection(const char *s) {
   return -1;
 }
 
+static const char *CrosshairColorName(uint8 color) {
+  switch (color) {
+  case kCrosshairColor_White: return "White";
+  case kCrosshairColor_Green: return "Green";
+  case kCrosshairColor_Blue: return "Blue";
+  case kCrosshairColor_Red: return "Red";
+  case kCrosshairColor_Yellow: return "Yellow";
+  case kCrosshairColor_Cyan: return "Cyan";
+  case kCrosshairColor_Magenta: return "Magenta";
+  case kCrosshairColor_Orange: return "Orange";
+  case kCrosshairColor_Original:
+  default:
+    return "Original";
+  }
+}
+
+static bool ParseCrosshairColor(const char *value, uint8 *out) {
+  if (StringEqualsNoCase(value, "Original") ||
+      StringEqualsNoCase(value, "Off") ||
+      StringEqualsNoCase(value, "Default")) {
+    *out = kCrosshairColor_Original;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "White")) {
+    *out = kCrosshairColor_White;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Green")) {
+    *out = kCrosshairColor_Green;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Blue")) {
+    *out = kCrosshairColor_Blue;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Red")) {
+    *out = kCrosshairColor_Red;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Yellow")) {
+    *out = kCrosshairColor_Yellow;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Cyan")) {
+    *out = kCrosshairColor_Cyan;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Magenta")) {
+    *out = kCrosshairColor_Magenta;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "Orange")) {
+    *out = kCrosshairColor_Orange;
+    return true;
+  }
+
+  char *end = NULL;
+  long color = strtol(value, &end, 10);
+  if (end != value && *end == '\0' &&
+      color >= 0 && color < kCrosshairColor_Count) {
+    *out = (uint8)color;
+    return true;
+  }
+  fprintf(stderr,
+          "CrosshairColor must be Original, White, Green, Blue, Red, "
+          "Yellow, Cyan, Magenta, Orange, or 0-%d\n",
+          kCrosshairColor_Count - 1);
+  return false;
+}
+
+static bool ParseEnhancedDisplayMode(const char *value) {
+  if (StringEqualsNoCase(value, "0") ||
+      StringEqualsNoCase(value, "4:3") ||
+      StringEqualsNoCase(value, "standard_4_3") ||
+      StringEqualsNoCase(value, "standard") ||
+      StringEqualsNoCase(value, "Off")) {
+    g_config.widescreen_extra = 0;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "1") ||
+      StringEqualsNoCase(value, "16:9") ||
+      StringEqualsNoCase(value, "widescreen_16_9")) {
+    g_config.widescreen_extra = 71;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "2") ||
+      StringEqualsNoCase(value, "16:10") ||
+      StringEqualsNoCase(value, "widescreen_16_10")) {
+    g_config.widescreen_extra = 52;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "3") ||
+      StringEqualsNoCase(value, "21:9") ||
+      StringEqualsNoCase(value, "ultrawide_21_9")) {
+    g_config.widescreen_extra = 132;
+    return true;
+  }
+  if (StringEqualsNoCase(value, "4") ||
+      StringEqualsNoCase(value, "32:9") ||
+      StringEqualsNoCase(value, "super_ultrawide_32_9")) {
+    g_config.widescreen_extra = 272;
+    return true;
+  }
+  fprintf(stderr,
+          "DisplayMode must be 0/4:3, 1/16:9, 2/16:10, 3/21:9, or 4/32:9\n");
+  return false;
+}
+
+static bool ParsePresentationFps(const char *value, uint16 *out) {
+  char *end = NULL;
+  long fps = strtol(value, &end, 10);
+  if (end != value && *end == '\0' &&
+      (fps == 20 || fps == 30 || fps == 60 || fps == 90 || fps == 120 ||
+       fps == 240 || fps == 360 || fps == 480)) {
+    *out = (uint16)fps;
+    return true;
+  }
+  fprintf(stderr,
+          "PresentationFPS must be 20, 30, 60, 90, 120, 240, 360, or 480\n");
+  return false;
+}
+
+static bool ParseUint8Option(const char *key, const char *value, uint8 *out,
+                             long min, long max) {
+  char *end = NULL;
+  long parsed = strtol(value, &end, 10);
+  if (end != value && *end == '\0' && parsed >= min && parsed <= max) {
+    *out = (uint8)parsed;
+    return true;
+  }
+  fprintf(stderr, "%s must be an integer from %ld through %ld\n",
+          key, min, max);
+  return false;
+}
+
 static bool HandleIniConfig(int section, const char *key, char *value) {
   if (section == 0) {
     for (int i = 0; i < countof(kKeyNameId); i++) {
@@ -333,6 +471,9 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       }
     } else if (StringEqualsNoCase(key, "NewRenderer")) {
       return ParseBool(value, &g_config.new_renderer);
+    } else if (StringEqualsNoCase(key, "EnhancedRenderer") ||
+               StringEqualsNoCase(key, "NativeRenderer")) {
+      return ParseBool(value, &g_config.enhanced_renderer);
     } else if (StringEqualsNoCase(key, "IgnoreAspectRatio")) {
       return ParseBool(value, &g_config.ignore_aspect_ratio);
     } else if (StringEqualsNoCase(key, "Fullscreen")) {
@@ -360,15 +501,69 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
         g_config.widescreen_extra = 71;
         return true;
       }
+      if (StringEqualsNoCase(value, "16:10")) {
+        /* 224 * 16 / 10 rounds to 358; (360 - 256) / 2 = 52. */
+        g_config.widescreen_extra = 52;
+        return true;
+      }
+      if (StringEqualsNoCase(value, "21:9")) {
+        /* 224 * 21 / 9 rounds to 523; use even-centered 520 = 132/side. */
+        g_config.widescreen_extra = 132;
+        return true;
+      }
+      if (StringEqualsNoCase(value, "32:9")) {
+        /* 224 * 32 / 9 rounds to 796; Enhanced uses 800 = 272/side. */
+        g_config.widescreen_extra = 272;
+        return true;
+      }
       char *end = NULL;
       long extra = strtol(value, &end, 10);
-      if (end != value && *end == '\0' && extra >= 0 && extra <= 95) {
-        g_config.widescreen_extra = (uint8)extra;
+      if (end != value && *end == '\0' && extra >= 0 &&
+          extra <= kWsExtraMax) {
+        g_config.widescreen_extra = (uint16)extra;
         return true;
       }
       fprintf(stderr,
-              "Widescreen must be Off, 4:3, 16:9, or 0-95 extra pixels per side\n");
+              "Widescreen must be Off, 4:3, 16:10, 16:9, 21:9, 32:9, or 0-%d extra pixels per side\n",
+              kWsExtraMax);
       return false;
+    } else if (StringEqualsNoCase(key, "DisplayMode")) {
+      return ParseEnhancedDisplayMode(value);
+    } else if (StringEqualsNoCase(key, "WidescreenHud") ||
+               StringEqualsNoCase(key, "WidescreenHUD")) {
+      return ParseBool(value, &g_config.widescreen_hud);
+    } else if (StringEqualsNoCase(key, "WidescreenHudOamFirstSlot") ||
+               StringEqualsNoCase(key, "WidescreenHUDOamFirstSlot")) {
+      return ParseUint8Option(key, value,
+                              &g_config.widescreen_hud_oam_first_slot,
+                              0, 127);
+    } else if (StringEqualsNoCase(key, "WidescreenHudOamSlots") ||
+               StringEqualsNoCase(key, "WidescreenHUDOamSlots")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_oam_slots,
+                              0, 128);
+    } else if (StringEqualsNoCase(key, "WidescreenHudOamHeight") ||
+               StringEqualsNoCase(key, "WidescreenHUDOamHeight")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_oam_height,
+                              0, 224);
+    } else if (StringEqualsNoCase(key, "WidescreenHudLeftEnd") ||
+               StringEqualsNoCase(key, "WidescreenHUDLeftEnd")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_left_end,
+                              0, 255);
+    } else if (StringEqualsNoCase(key, "WidescreenHudRightStart") ||
+               StringEqualsNoCase(key, "WidescreenHUDRightStart")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_right_start,
+                              0, 255);
+    } else if (StringEqualsNoCase(key, "WidescreenHudBgY0") ||
+               StringEqualsNoCase(key, "WidescreenHUDBgY0")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_bg_y0,
+                              0, 225);
+    } else if (StringEqualsNoCase(key, "WidescreenHudBgY1") ||
+               StringEqualsNoCase(key, "WidescreenHUDBgY1")) {
+      return ParseUint8Option(key, value, &g_config.widescreen_hud_bg_y1,
+                              0, 225);
+    } else if (StringEqualsNoCase(key, "CrosshairColor") ||
+               StringEqualsNoCase(key, "CrosshairColour")) {
+      return ParseCrosshairColor(value, &g_config.crosshair_color);
     } else if (StringEqualsNoCase(key, "Shader")) {
       g_config.shader = *value ? value : NULL;
       return true;
@@ -390,6 +585,11 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     if (StringEqualsNoCase(key, "Autosave")) {
       g_config.autosave = (bool)strtol(value, (char **)NULL, 10);
       return true;
+    } else if (StringEqualsNoCase(key, "PresentationFPS") ||
+               StringEqualsNoCase(key, "PresentationFps")) {
+      return ParsePresentationFps(value, &g_config.presentation_fps);
+    } else if (StringEqualsNoCase(key, "ShowFPS")) {
+      return ParseBool(value, &g_config.show_fps);
     } else if (StringEqualsNoCase(key, "DisplayPerfInTitle")) {
       return ParseBool(value, &g_config.display_perf_title);
     } else if (StringEqualsNoCase(key, "DisableFrameDelay")) {
@@ -400,6 +600,11 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.enable_snes9x_oracle);
     }
   } else if (section == 4) {
+    if (StringEqualsNoCase(key, "GodMode")) {
+      return ParseBool(value, &g_config.god_mode);
+    } else if (StringEqualsNoCase(key, "GodNuke")) {
+      return ParseBool(value, &g_config.god_nuke);
+    }
   }
   return false;
 }
@@ -460,6 +665,16 @@ void ParseConfigFile(const char *filename) {
   g_config.enable_gamepad[0] = true;
   g_config.enable_gamepad[1] = true;
   g_config.gamepad_deadzone = 10000;
+  g_config.widescreen_hud = true;
+  g_config.widescreen_hud_oam_first_slot = 0;
+  g_config.widescreen_hud_oam_slots = 10;
+  g_config.widescreen_hud_oam_height = 224;
+  g_config.widescreen_hud_left_end = 64;
+  g_config.widescreen_hud_right_start = 192;
+  g_config.widescreen_hud_bg_y0 = 161;
+  g_config.widescreen_hud_bg_y1 = 225;
+  g_config.god_nuke = true;
+  g_config.presentation_fps = 60;
   /* Default ON to preserve current behaviour across other ports that
    * share this framework code; per-game .ini sets it false where the
    * oracle is incompatible with the repro workflow. See config.h doc. */
@@ -471,6 +686,10 @@ void ParseConfigFile(const char *filename) {
     if (!ParseOneConfigFile(filename, 0))
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
+  /* The launcher exposes Star Fox Enhanced as one opt-in widescreen feature.
+   * Keep legacy EnhancedRenderer keys from leaving the native renderer active
+   * in a 4:3 viewport, which produces broken composition without widening. */
+  g_config.enhanced_renderer = g_config.widescreen_extra != 0;
   RegisterDefaultKeys();
 }
 
@@ -583,12 +802,18 @@ void WriteConfigFile(const char *filename) {
     { "Graphics",   "Fullscreen" },
     { "Graphics",   "IgnoreAspectRatio" },
     { "Graphics",   "Widescreen" },
+    { "Graphics",   "CrosshairColor" },
+    { "Graphics",   "EnhancedRenderer" },
     { "Graphics",   "LinearFiltering" },
+    { "Features",   "GodMode" },
+    { "Features",   "GodNuke" },
     { "Sound",      "EnableAudio" },
     { "Sound",      "AudioFreq" },
     { "GamepadMap", "EnableGamepad1" },
     { "GamepadMap", "EnableGamepad2" },
     { "GamepadMap", "GamepadDeadzone" },
+    { "General",    "PresentationFPS" },
+    { "General",    "ShowFPS" },
     { "General",    "SkipLauncher" },
   };
   const int n = (int)countof(kvs);
@@ -602,20 +827,46 @@ void WriteConfigFile(const char *filename) {
   snprintf(kvs[2].val, sizeof(kvs[2].val), "%u", g_config.fullscreen);
   snprintf(kvs[3].val, sizeof(kvs[3].val), "%d",
            g_config.ignore_aspect_ratio ? 1 : 0);
-  snprintf(kvs[4].val, sizeof(kvs[4].val), "%s",
-           g_config.widescreen_extra ? "16:9" : "Off");
-  snprintf(kvs[5].val, sizeof(kvs[5].val), "%d",
-           g_config.linear_filtering ? 1 : 0);
+  if (g_config.widescreen_extra == 0) {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "Off");
+  } else if (g_config.widescreen_extra == 52) {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "16:10");
+  } else if (g_config.widescreen_extra == 71) {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "16:9");
+  } else if (g_config.widescreen_extra == 132) {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "21:9");
+  } else if (g_config.widescreen_extra == 272) {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "32:9");
+  } else {
+    snprintf(kvs[4].val, sizeof(kvs[4].val), "%u",
+             g_config.widescreen_extra);
+  }
+  snprintf(kvs[5].val, sizeof(kvs[5].val), "%s",
+           g_config.crosshair_color < kCrosshairColor_Count
+               ? CrosshairColorName(g_config.crosshair_color)
+               : CrosshairColorName(kCrosshairColor_Original));
   snprintf(kvs[6].val, sizeof(kvs[6].val), "%d",
-           g_config.enable_audio ? 1 : 0);
-  snprintf(kvs[7].val, sizeof(kvs[7].val), "%u", g_config.audio_freq);
-  snprintf(kvs[8].val, sizeof(kvs[8].val), "%s",
-           g_config.enable_gamepad[0] ? "true" : "false");
-  snprintf(kvs[9].val, sizeof(kvs[9].val), "%s",
-           g_config.enable_gamepad[1] ? "true" : "false");
+           g_config.enhanced_renderer ? 1 : 0);
+  snprintf(kvs[7].val, sizeof(kvs[7].val), "%d",
+           g_config.linear_filtering ? 1 : 0);
+  snprintf(kvs[8].val, sizeof(kvs[8].val), "%d",
+           g_config.god_mode ? 1 : 0);
+  snprintf(kvs[9].val, sizeof(kvs[9].val), "%d",
+           g_config.god_nuke ? 1 : 0);
   snprintf(kvs[10].val, sizeof(kvs[10].val), "%d",
+           g_config.enable_audio ? 1 : 0);
+  snprintf(kvs[11].val, sizeof(kvs[11].val), "%u", g_config.audio_freq);
+  snprintf(kvs[12].val, sizeof(kvs[12].val), "%s",
+           g_config.enable_gamepad[0] ? "true" : "false");
+  snprintf(kvs[13].val, sizeof(kvs[13].val), "%s",
+           g_config.enable_gamepad[1] ? "true" : "false");
+  snprintf(kvs[14].val, sizeof(kvs[14].val), "%d",
            g_config.gamepad_deadzone);
-  snprintf(kvs[11].val, sizeof(kvs[11].val), "%d",
+  snprintf(kvs[15].val, sizeof(kvs[15].val), "%d",
+           g_config.presentation_fps ? g_config.presentation_fps : 60);
+  snprintf(kvs[16].val, sizeof(kvs[16].val), "%d",
+           g_config.show_fps ? 1 : 0);
+  snprintf(kvs[17].val, sizeof(kvs[17].val), "%d",
            g_config.skip_launcher ? 1 : 0);
 
   char *data = NULL;

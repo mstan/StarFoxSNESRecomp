@@ -6,5 +6,6 @@ const RtlGameInfo kStarFoxGameInfo = {
   .initialize = NULL,
   .run_frame = &StarFoxRunFrame,
   .draw_ppu_frame = &StarFoxDrawPpuFrame,
+  .enhanced_render_frame = &StarFoxEnhancedRenderFrame,
   .save_name_prefix = "save",
 };
