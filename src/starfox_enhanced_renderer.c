@@ -676,7 +676,7 @@ static bool native_shape_overlay_enabled(void) {
   static int enabled;
   if (!checked) {
     const char *env = getenv("SNESRECOMP_ENHANCED_NATIVE_SHAPES");
-    enabled = env && *env && strcmp(env, "0") != 0;
+    enabled = !(env && *env && strcmp(env, "0") == 0);
     checked = 1;
   }
   return enabled != 0;

@@ -1060,7 +1060,8 @@ int main(int argc, char** argv) {
       game_info.num_players = 1;     /* single-player — hide the Player 2 row */
       game_info.config_path = config_file ? config_file : "config.ini";
 #if defined(RECOMP_LAUNCHER)
-      game_info.mods = StarFoxLauncherModsProvider(&settings);
+      game_info.mods = StarFoxLauncherModsProvider(&settings,
+                                                   game_info.config_path);
 #endif
 
 #if defined(RECOMP_LAUNCHER)
@@ -1085,13 +1086,23 @@ int main(int argc, char** argv) {
         g_config.fullscreen = (uint8)settings.fullscreen;
         g_config.ignore_aspect_ratio = settings.ignore_aspect != 0;
         g_config.linear_filtering = settings.linear_filter != 0;
+#if defined(RECOMP_LAUNCHER)
+        /* Star Fox Enhanced is exposed through the built-in Mods provider, not
+         * the generic launcher widescreen row. The generic field is hidden for
+         * this title and remains false in the UI model, so using it here would
+         * immediately undo the provider's selected aspect on PLAY. */
+        g_config.enhanced_renderer = g_config.widescreen_extra != 0;
+#else
         if (!settings.widescreen) {
           g_config.widescreen_extra = 0;
+          g_config.enhanced_renderer = false;
         } else if (g_config.widescreen_extra == 0) {
           g_config.widescreen_extra = 71;
-        }
-        if (g_config.widescreen_extra != 0)
           g_config.enhanced_renderer = true;
+        } else {
+          g_config.enhanced_renderer = true;
+        }
+#endif
         g_config.enable_audio = settings.enable_audio != 0;
         g_config.audio_freq = (uint16)settings.audio_freq;
         g_config.enable_gamepad[0] = settings.player_src[0] == 2;

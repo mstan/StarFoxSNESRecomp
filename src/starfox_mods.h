@@ -4,5 +4,5 @@
 #include "recomp_launcher.h"
 
 const RecompLauncherCModProvider *StarFoxLauncherModsProvider(
-    RecompLauncherCSettings *settings);
+    RecompLauncherCSettings *settings, const char *config_path);
 #endif

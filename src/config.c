@@ -686,6 +686,10 @@ void ParseConfigFile(const char *filename) {
     if (!ParseOneConfigFile(filename, 0))
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
+  /* The launcher exposes Star Fox Enhanced as one opt-in widescreen feature.
+   * Keep legacy EnhancedRenderer keys from leaving the native renderer active
+   * in a 4:3 viewport, which produces broken composition without widening. */
+  g_config.enhanced_renderer = g_config.widescreen_extra != 0;
   RegisterDefaultKeys();
 }
 

@@ -10,6 +10,7 @@
 
 typedef struct StarFoxLauncherModsContext {
   RecompLauncherCSettings *settings;
+  const char *config_path;
   char error[256];
 } StarFoxLauncherModsContext;
 
@@ -305,6 +306,7 @@ static int commit_mods(void *ctx, const char *image_path) {
   (void)image_path;
   StarFoxLauncherModsContext *mod_ctx = (StarFoxLauncherModsContext *)ctx;
   if (mod_ctx) mod_ctx->error[0] = 0;
+  WriteConfigFile(mod_ctx ? mod_ctx->config_path : NULL);
   return 1;
 }
 
@@ -487,9 +489,11 @@ static int diagnostic_get(void *ctx, const char *package_id,
 }
 
 const RecompLauncherCModProvider *StarFoxLauncherModsProvider(
-    RecompLauncherCSettings *settings) {
+    RecompLauncherCSettings *settings, const char *config_path) {
   static RecompLauncherCModProvider provider;
   g_starfox_mods_context.settings = settings;
+  g_starfox_mods_context.config_path =
+      config_path && *config_path ? config_path : "config.ini";
   g_starfox_mods_context.error[0] = 0;
   memset(&provider, 0, sizeof(provider));
   provider.ctx = &g_starfox_mods_context;
