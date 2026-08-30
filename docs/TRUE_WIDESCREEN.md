@@ -3,12 +3,13 @@
 ## Attribution
 
 Star Fox native widescreen is adapted from `DisplayMode` and renderer work in
-kandowontu's Star Fox Enhanced:
-<https://github.com/kandowontu/starfox-enhanced>. StarFoxSNESRecomp's
-contribution is the recomp integration layer that maps retail Star Fox runtime
-state into that separate native renderer model. Credit for the widescreen
-renderer design and reference implementation belongs to the Star Fox Enhanced
-author and project.
+kandowontu's Star Fox Enhanced decomp:
+<https://github.com/kandowontu/starfox-enhanced>. Star Fox Enhanced is the
+authoritative full-experience project; StarFoxSNESRecomp's contribution is the
+development reference integration layer that maps retail Star Fox runtime state
+into that separate native renderer model. Credit for the widescreen renderer
+design, reference implementation, and presentation frame-rate behavior belongs
+to the Star Fox Enhanced author and project.
 
 Star Fox widescreen is no longer a Star Fox-specific modification of the stock
 SNES renderer. The stock path renders the authentic 256x224 picture. Wider
@@ -74,11 +75,12 @@ state is separately proven, and it must not re-enable Star Fox PPU/SuperFX
 widening hooks.
 
 The earlier local C Super FX shape overlay is not part of normal Enhanced
-output and is no longer built into the Star Fox target. A provisional direct
-bridge to the pinned Enhanced `SoftwareRenderer` exists behind
-`SNESRECOMP_ENHANCED_NATIVE_SHAPES=1`; it decodes Star Fox ROM shapes through
+output and is no longer built into the Star Fox target. A direct bridge to the
+pinned Enhanced `SoftwareRenderer` decodes Star Fox ROM shapes through
 Enhanced's `ShapeDecoder` and renders them through Enhanced's mesh/material
-pipeline from a read-only source-frame snapshot of retail WRAM.
+pipeline from a read-only source-frame snapshot of retail WRAM. The native
+shape path is enabled by default in Enhanced mode and can be disabled for
+diagnostics with `SNESRECOMP_ENHANCED_NATIVE_SHAPES=0`.
 `SNESRECOMP_ENHANCED_FRAME_BMP_DIR=<dir>` can dump bounded Enhanced
 presentation-frame sequences with optional `_START`, `_END`, and `_STEP`
 environment variables. The snapshot is latched at `StarFoxEnhancedPostFrame`
@@ -106,9 +108,9 @@ including the source header size adjustment and per-object colour. The native
 world pass also calls
 Enhanced's `draw_cockpit_hud` when retail `HUDROT=$154e` is enabled, using the
 source `M_HUDCOLOUR=$3512` and `M_HUDFLAGS=$3514` state and the same centered
-224-pixel cockpit viewport as the PC port. The WRAM bridge remains diagnostic
-until terrain/grid, working shadow state, particles, scaled sprites, text,
-remaining HUD coverage, and gameplay validation are complete.
+224-pixel cockpit viewport as the PC port. The WRAM bridge is the current
+Enhanced-mode renderer feed; remaining cleanup is focused on transition
+artifacting, intermittent bottom-edge black bars, and particle/effect parity.
 
 Retail and the Enhanced oracle do not share every shape header address. For
 example, the live retail player object can report shape `$d320`, while the
@@ -146,11 +148,11 @@ renderers compose a wider framebuffer from game-specific assets/state.
 | PC port source | Recomp counterpart | Status |
 |---|---|---|
 | `src/simulation/wdc65816.cpp` symbol lookup and draw interception | `recomp/bank*.cfg` `symbol` overlay plus `StarFoxEnhancedLatchSourceFrame` feeding `StarFoxEnhancedRenderFrame` | Modified-build symbols imported; native shape snapshots now use runtime-proven retail object-list/camera addresses instead of Enhanced RAM offsets |
-| `include/starfox/render/software_renderer.hpp` `RenderPose` | `StarFoxEnhancedDrawNativeShape` | Provisional bridge; disabled by default pending gameplay validation |
+| `include/starfox/render/software_renderer.hpp` `RenderPose` | `StarFoxEnhancedDrawNativeShape` | Native shape bridge enabled in Enhanced mode, with diagnostics/env overrides for parity work |
 | `src/render/software_renderer.cpp` shape transform, source projection, clipping, BSP ordering, face fill, simple scaled sprites | `StarFoxEnhancedDrawNativeShape` via pinned Enhanced sources | Linked and callable for solid and scaled-sprite objects from WRAM object state |
 | `src/render/background_renderer.cpp` BG1/BG2/BG3 native tile composition | `src/starfox_enhanced_native.cpp` | Direct Enhanced renderer bridge for native BG layers |
 | `src/render/sprite_renderer.cpp`, scaled text, particles, cockpit HUD | `src/starfox_enhanced_native.cpp` for OAM and cockpit HUD; text/effects pending | OAM and MHUD line bridge present; text/effects parity needed |
-| timing interpolation in `tests/timing_tests.cpp` and simulation snapshots | presentation history and fixed duplicate-present scheduling | Not yet interpolation |
+| timing interpolation in `tests/timing_tests.cpp` and simulation snapshots | presentation history, fixed duplicate-present scheduling, and native pose interpolation | Implemented for native shape poses; particle/effect parity still pending |
 
 ## Validation Rule
 

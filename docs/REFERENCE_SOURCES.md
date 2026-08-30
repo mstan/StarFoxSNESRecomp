@@ -11,7 +11,7 @@ not yet rebuildable. It is therefore used only as a local read-only source of
 addresses, labels, comments, and behavioral annotations. Its assembly and
 assets are not vendored into this project.
 
-## Star Fox Enhanced / UltraStarFox source-port references
+## Star Fox Enhanced / UltraStarFox decomp references
 
 - Repository: <https://github.com/kandowontu/starfox-enhanced>
 - Pinned reference commit: `ad5c6e47badca6339b028c10d8371e9036ee3c79`

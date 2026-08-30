@@ -1,3 +1,15 @@
+> **Development reference status and credit:** The authoritative Star Fox
+> Enhanced project is kandowontu's
+> [starfox-enhanced](https://github.com/kandowontu/starfox-enhanced), a decomp
+> project and the reference implementation for the custom renderer behavior
+> adapted here. This StarFoxSNESRecomp repository is for development reference
+> purposes and is not intended to be a production release. Users seeking the
+> full Star Fox Enhanced experience should use
+> [starfox-enhanced](https://github.com/kandowontu/starfox-enhanced). We are
+> grateful for kandowontu's work and credit that project for the reference
+> implementation behind this repo's opt-in native widescreen renderer and
+> presentation frame-rate modes.
+
 # StarFoxSNESRecomp
 
 Static recompilation of *Star Fox* (SNES) into native C, using the
@@ -13,18 +25,22 @@ the Super FX/GSU coprocessor extensively. Its low-level execution and
 architectural state remain authoritative; compiled paths may optimize that
 behavior but must not replace or diverge from it.
 
-## Current status: v0.0.1 development preview
+## Current status: development reference preview
 
 The game boots and its attract sequence, menus, route selection, training, and
-gameplay have passed basic interactive testing. The project also includes an
-opt-in separate native renderer adapted from Star Fox Enhanced for widened
-presentation, with 16:9, 21:9, and 32:9 presets under active validation.
-Authentic 4:3 output remains available and does not use the Enhanced renderer.
+gameplay have passed basic interactive testing. The project includes an opt-in
+separate native renderer adapted from kandowontu's Star Fox Enhanced decomp for
+widened presentation, with fixed 16:10, 16:9, 21:9, and 32:9 presets. Authentic
+4:3 output remains available when the Enhanced Widescreen mod is disabled and
+does not use the Enhanced renderer.
 
-Longer play sessions, additional routes, save-state behavior, and non-Windows
-builds still need more coverage before the project should be described as
-production-ready. Please report reproducible visual, audio, timing, or
+Known remaining Enhanced-mode cleanup includes intermittent bottom-edge black
+bars, transition artifacting, and incomplete particle/effect parity. Longer
+play sessions, additional routes, save-state behavior, and non-Windows builds
+still need more coverage. Please report reproducible visual, audio, timing, or
 stability problems through [GitHub Issues](../../issues).
+
+![StarFoxSNESRecomp Enhanced widescreen training mode](docs/images/starfox-enhanced-widescreen-training.png)
 
 ## Quick start (Windows release)
 
@@ -92,28 +108,28 @@ in `config.ini`:
 
 Widescreen output is an opt-in separate native renderer adapted from
 `DisplayMode` and renderer work in kandowontu's
-[starfox-enhanced](https://github.com/kandowontu/starfox-enhanced). Credit for
-the widescreen renderer design and reference implementation belongs to the Star
-Fox Enhanced author and project; this repo integrates that model with the
-retail Star Fox recomp runtime.
+[starfox-enhanced](https://github.com/kandowontu/starfox-enhanced) decomp.
+Credit for the widescreen renderer design and reference implementation belongs
+to the Star Fox Enhanced author and project; this repo integrates that model
+with the retail Star Fox recomp runtime.
 
-Enable `EnhancedRenderer = 1`, then set `DisplayMode` in `config.ini` to one of
-the following fixed modes:
+In the launcher, open **Mods**, enable **Enhanced Widescreen**, and choose one
+of the fixed aspect presets:
 
-- `0`/`4:3` for the original presentation width.
-- `1`/`16:9` for widescreen.
-- `2`/`16:10` for a narrower expanded viewport.
-- `3`/`21:9` for ultrawide.
-- `4`/`32:9` for super-ultrawide.
+- `16:10`
+- `16:9`
+- `21:9`
+- `32:9`
 
-`Widescreen` remains accepted as a compatibility alias, including integer extra
-pixels per side, but Star Fox stock rendering remains 4:3. Wider output is only
-used by the Enhanced native renderer path.
+Disabling **Enhanced Widescreen** returns to Authentic 4:3. `DisplayMode`,
+`Widescreen`, and `EnhancedRenderer` remain accepted as configuration keys for
+developer validation, including integer extra pixels per side, but Star Fox
+stock rendering remains 4:3. Wider output is only used by the Enhanced native
+renderer path.
 
 See [docs/TRUE_WIDESCREEN.md](docs/TRUE_WIDESCREEN.md) for the rendering
 model, validation notes, and the remaining spawn/culling audit.
 
-The launcher Mods view exposes the Enhanced renderer and fixed display modes.
 An adaptive display mode is not implemented yet.
 
 ## Enhanced-Derived Mods
@@ -130,7 +146,7 @@ The `[Features]` section also exposes `GodMode` and `GodNuke`. `GodMode = 1`
 reasserts the Enhanced-derived no-collision flag and keeps Nova Bombs at a
 floor of three during active gameplay. With `GodNuke = 1`, hold R while firing
 a Nova Bomb with A to arm the newly created nuke for the Enhanced-style screen
-clear, including the protected boss-shape exceptions from the reference port.
+clear, including the protected boss-shape exceptions from the reference decomp.
 
 Set `ShowFPS = 1` in `[General]` to start with the live on-screen FPS readout
 enabled. Like Enhanced, it reports completed presentations in short samples.
@@ -139,8 +155,9 @@ The `F` hotkey still toggles it at runtime.
 Set `PresentationFPS` to `20`, `30`, `60`, `90`, `120`, `240`, `360`, or
 `480` to choose the host presentation cadence. These modes keep SNES
 simulation cadence unchanged. Rates below 60 skip presentation draws; rates
-above 60 duplicate the newest completed presentation with vsync disabled. The
-high-FPS modes do not yet include Enhanced's transform interpolation.
+above 60 duplicate the newest completed presentation with vsync disabled.
+Enhanced-mode native shape poses use presentation interpolation to reduce
+object jitter, adapted from the Star Fox Enhanced reference behavior.
 
 ## Building from source
 
@@ -204,7 +221,7 @@ by the `snesrecomp` gitlink.
 | `docs/` | Reference-source provenance and development documentation. |
 | `snesrecomp/` | Junction or symlink to the sibling framework checkout. |
 | `third_party/` | Vendored dependencies retaining their own licenses. |
-| `third_party/starfox-enhanced/` | Pinned reference-only source port used for comparison and symbol provenance. |
+| `third_party/starfox-enhanced/` | Pinned reference-only decomp used for comparison and symbol provenance. |
 | `config.ini` | Runtime graphics, audio, controller, and hotkey settings. |
 | `recomp/launcher/` | Star Fox launcher theme and North American cover thumbnail. |
 | `tools/make_release.ps1` | Packages a completed MinGW release build and its runtime DLLs. |
@@ -217,7 +234,7 @@ See [docs/REFERENCE_SOURCES.md](docs/REFERENCE_SOURCES.md) for its pinned commit
 and usage constraints.
 
 [Star Fox Enhanced](https://github.com/kandowontu/starfox-enhanced) is pinned as
-a reference-only submodule for symbol inventory, architecture comparison, and
+a reference-only decomp submodule for symbol inventory, architecture comparison, and
 portable mod research. See
 [docs/STARFOX_ENHANCED_COMPARISON.md](docs/STARFOX_ENHANCED_COMPARISON.md) for
 the current comparison notes and transfer candidates.

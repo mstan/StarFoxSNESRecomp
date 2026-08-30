@@ -24,6 +24,8 @@ saves/
 *.png
 *.jpg
 *.jpeg
+!docs/images/
+!docs/images/*.png
 *.log
 *.out
 *.err

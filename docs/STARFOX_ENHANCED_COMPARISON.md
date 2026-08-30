@@ -1,8 +1,10 @@
 # Star Fox Enhanced comparison
 
-This document records what is currently useful from
-<https://github.com/kandowontu/starfox-enhanced> for StarFoxSNESRecomp and,
-where applicable, for the shared snesrecomp framework.
+This document records what is currently useful from kandowontu's Star Fox
+Enhanced decomp, <https://github.com/kandowontu/starfox-enhanced>, for
+StarFoxSNESRecomp and, where applicable, for the shared snesrecomp framework.
+Star Fox Enhanced remains the authoritative full-experience project and
+reference implementation.
 
 ## Current local baseline
 
@@ -46,35 +48,29 @@ and comparison harness rather than a bulk import into shared snesrecomp code.
    concrete follow-up is a title-neutral presentation diagnostics facade after
    Star Fox proves the title-side hooks.
 
-5. Feature implementation: in progress. Crosshair color, including the OBJ
-   reticle and Super FX cockpit HUD color hook, God Mode, God Nuke, 16:10
-   widescreen preset parsing, launcher exposure for the fixed 16:9 path,
-   Enhanced-style `DisplayMode` aliases, persistent
-   `ShowFPS` startup state, and the retained-frame presentation debugger have
-   concrete recomp-side implementations. `PresentationFPS` supports 20/30/60
-   render cadence and 90/120/240/360/480 duplicate-present scheduling.
-   21:9/32:9 ultrawide modes are accepted through config, but only become the
-   effective output width when the native renderer is enabled. High-FPS
-   transform interpolation, draggable per-element HUD layouts, EX mode, and
-   Super Scope/mouse/free camera behavior are not implemented.
+5. Feature implementation: milestone merged. Crosshair color, God Mode, God
+   Nuke, Enhanced-style display modes, persistent `ShowFPS`, `PresentationFPS`
+   modes, retained-frame presentation debugging, and Enhanced native widescreen
+   rendering have concrete recomp-side implementations. Enhanced-mode native
+   shape poses use presentation interpolation to reduce object jitter.
 
-6. Launcher surfacing: in progress. The shared recomp-ui Mods view is enabled
-   for Star Fox and backed by a built-in config provider exposing the current
-   Enhanced-derived feature set: Display Mode, Crosshair Color, Enhanced
-   Renderer, God Mode, God Nuke, Presentation FPS, and Show FPS.
+6. Launcher surfacing: milestone merged. The shared recomp-ui Mods view is
+   enabled for Star Fox and backed by a built-in config provider. The user-facing
+   widescreen surface is a single **Enhanced Widescreen** feature with fixed
+   16:10, 16:9, 21:9, and 32:9 aspect choices; disabling it returns to Authentic
+   4:3.
 
-7. Enhanced-renderer scaffold: in progress. The shared `RtlGameInfo` contract
-   now has an optional title-owned `enhanced_render_frame` hook. Star Fox wires
-   it behind `EnhancedRenderer = 0` by default. When enabled, the hook owns the
-   presentation frame before the default presenter runs. The direct native
-   bridge now compiles Star Fox Enhanced's `BackgroundRenderer` and
-   `SpriteRenderer` for BG/OAM presentation. The previous local Super FX shape
-   overlay is disabled by default and kept only as a diagnostic until the
-   pinned Enhanced `SoftwareRenderer` is bridged.
+7. Enhanced-renderer scaffold: milestone merged. The shared `RtlGameInfo`
+   contract has an optional title-owned `enhanced_render_frame` hook. Star Fox
+   uses it only for the opt-in Enhanced path. The direct native bridge compiles
+   Star Fox Enhanced's `BackgroundRenderer`, `SpriteRenderer`, and
+   `SoftwareRenderer` for BG/OAM and shape presentation. The previous local C
+   Super FX shape overlay is not part of normal output.
 
-8. Validation: in progress. The tools and native build validate without
-   committing generated symbol or ROM output; interactive route/boss audits are
-   still required before these mods should be treated as Enhanced parity.
+8. Validation: in progress. Basic interactive gameplay validation and local
+   TCP/frame-dump checks have passed for the merged milestone. Interactive
+   route/boss audits are still required before this should be treated as full
+   Enhanced parity.
 
 ## Portable candidates
 
@@ -108,7 +104,7 @@ and comparison harness rather than a bulk import into shared snesrecomp code.
 - Enhanced's native C++ renderer is game-specific presentation code. It is not
   a drop-in replacement for the generic snesrecomp PPU renderer, but the Star
   Fox opt-in renderer can port/adapt it directly behind the title callback.
-- RetroCPU, SDL3 integration, and native app structure are source-port
+- RetroCPU, SDL3 integration, and native app structure are decomp project
   architecture, not recomp framework components.
 - Star Fox EX and patch-built outputs must remain outside this repository unless
   their availability and licensing are verified separately.
@@ -125,9 +121,8 @@ The long-term renderer plan should be split between framework and title work:
    pinned Enhanced renderer as the source for native framebuffer, BG/OAM,
    Super FX transforms, clipping, line colors, cockpit/HUD composition, and
    high-FPS interpolation. `src/starfox_enhanced_native.cpp` now builds against
-   the pinned Enhanced `BackgroundRenderer` and `SpriteRenderer` and feeds them
-   from snesrecomp PPU state. Super FX geometry must move next to Enhanced's
-   `SoftwareRenderer`; the local C overlay is not accepted as parity output.
+   the pinned Enhanced `BackgroundRenderer`, `SpriteRenderer`, and
+   `SoftwareRenderer` and feeds them from snesrecomp state.
 3. Keep the default PPU renderer intact for compatibility, debugging, and
    regression comparison.
 4. Validate the native Star Fox renderer across routes, bosses, comms,
