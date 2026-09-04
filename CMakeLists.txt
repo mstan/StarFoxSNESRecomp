@@ -102,3 +102,23 @@ endif()
 recomp_target_launcher_ui(StarFoxSNESRecomp
   CONSOLE snes
   BOXART ${CMAKE_SOURCE_DIR}/recomp/launcher/boxart.tga)
+
+# Arwing64 developer tool: extracts the Star Fox 64 Arwing from an owner ROM
+# into the N64MESHB blob and renders preview PNGs through host_mesh. Shares the
+# exact decoder sources the game links, so what the tool shows is what the
+# game draws. Not shipped in release zips.
+add_executable(arwing64_tool
+  tools/arwing64_tool.c
+  src/mods/arwing64/sha1.c
+  src/mods/arwing64/sf64_rom.c
+  src/mods/arwing64/sf64_assets.c
+  src/mods/arwing64/arwing64_extract.c
+  ${SNESRECOMP_ROOT}/runner/src/host_mesh.c
+  ${SNESRECOMP_ROOT}/runner/src/host_mesh_builder.c)
+target_include_directories(arwing64_tool PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/mods/arwing64
+  ${SNESRECOMP_ROOT}/runner/src
+  ${CMAKE_SOURCE_DIR}/recomp-ui/src/third_party)
+if(NOT MSVC)
+  target_link_libraries(arwing64_tool PRIVATE m)
+endif()
