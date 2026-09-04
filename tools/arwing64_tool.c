@@ -164,10 +164,12 @@ int main(int argc, char **argv) {
   }
   const char *rom_path = argv[1], *out_dir = argv[2];
   const char *pose_name = "wings_half_open";
+  const char *break_mode = "both"; /* a | b | both | none */
   int ss = 2, want_json = 0;
   for (int i = 3; i < argc; i++) {
     if (!strcmp(argv[i], "--pose") && i + 1 < argc) pose_name = argv[++i];
     else if (!strcmp(argv[i], "--ss") && i + 1 < argc) ss = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--break") && i + 1 < argc) break_mode = argv[++i];
     else if (!strcmp(argv[i], "--json")) want_json = 1;
   }
   size_t rom_size = 0;
@@ -241,12 +243,19 @@ int main(int argc, char **argv) {
   const int pose = host_mesh_find_pose(mesh, pose_name);
   if (pose < 0) fprintf(stderr, "warning: pose %s not found\n", pose_name);
   Override ov;
-  ov.broken_a = ov.broken_b = 1;
+  ov.broken_a = !strcmp(break_mode, "a") || !strcmp(break_mode, "both");
+  ov.broken_b = !strcmp(break_mode, "b") || !strcmp(break_mode, "both");
   ov.list_broken_a = host_mesh_find_display_list(mesh, "aAwRightWingBrokenDL");
   ov.list_broken_b = host_mesh_find_display_list(mesh, "aAwLeftWingBrokenDL");
   int ok = 1;
+  /* Camera convention: yaw 0 looks at the nose (nose is -Z in model space and
+   * the camera sits at +Z), yaw 180 looks from behind the tail. */
   snprintf(path, sizeof(path), "%s/preview_front.png", out_dir);
+  ok &= render_preview(mesh, path, 0.0f, 0.0f, pose, ss, NULL);
+  snprintf(path, sizeof(path), "%s/preview_rear.png", out_dir);
   ok &= render_preview(mesh, path, 180.0f, 0.0f, pose, ss, NULL);
+  snprintf(path, sizeof(path), "%s/preview_rear_broken.png", out_dir);
+  ok &= render_preview(mesh, path, 180.0f, 10.0f, pose, ss, &ov);
   snprintf(path, sizeof(path), "%s/preview_side.png", out_dir);
   ok &= render_preview(mesh, path, 90.0f, 0.0f, pose, ss, NULL);
   snprintf(path, sizeof(path), "%s/preview_top.png", out_dir);

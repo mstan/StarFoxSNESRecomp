@@ -1,5 +1,6 @@
 #include "arwing64.h"
 
+#include "arwing64_audio.h"
 #include "arwing64_extract.h"
 #include "sf64_rom.h"
 
@@ -80,6 +81,8 @@ typedef struct Runtime {
   int prev_valid;
   uint32_t frame_counter;
   float flap_pitch_deg, flap_roll_deg; /* smoothed */
+  /* Debug overrides (arwing force ...): -1 = follow the guest. */
+  int force_wing, force_roll, force_boost, force_brake, force_flash;
 } Runtime;
 
 static Runtime g_rt;
@@ -315,9 +318,23 @@ static void revert_patch(void) {
 
 /* ---- lifecycle ------------------------------------------------------------ */
 
+static void reset_overrides(void) {
+  g_rt.force_wing = -1;
+  g_rt.force_roll = 0;
+  g_rt.force_boost = 0;
+  g_rt.force_brake = 0;
+  g_rt.force_flash = 0;
+}
+
 void arwing64_refresh(void) {
+  static int overrides_initialised;
+  if (!overrides_initialised) {
+    reset_overrides();
+    overrides_initialised = 1;
+  }
   const int enabled = g_config.arwing64_enabled ? 1 : 0;
   if (!enabled) {
+    arwing64_audio_refresh(NULL, 0);
     revert_patch();
     if (g_rt.mesh) {
       host_mesh_free(g_rt.mesh);
@@ -337,6 +354,19 @@ void arwing64_refresh(void) {
   if (!apply_patch()) return;
   set_status(kArwing64_Active, NULL);
   g_rt.refreshed_for_enabled = 1;
+  {
+    /* Audio clips live beside the mesh blob in the cache directory. */
+    char dir[512];
+    dir[0] = 0;
+    if (g_rt.stats.cache_path[0]) {
+      snprintf(dir, sizeof(dir), "%s", g_rt.stats.cache_path);
+      char *slash = strrchr(dir, '/');
+      char *bslash = strrchr(dir, '\\');
+      char *cut = slash > bslash ? slash : bslash;
+      if (cut) *cut = 0;
+    }
+    arwing64_audio_refresh(dir, g_config.arwing64_sfx ? 1 : 0);
+  }
 }
 
 int arwing64_active(void) {
@@ -391,6 +421,7 @@ void arwing64_read_guest_state(Arwing64GuestState *out) {
 
 void arwing64_post_frame(void) {
   if (!g_config.arwing64_enabled) return;
+  arwing64_audio_frame();
   Arwing64GuestState g;
   arwing64_read_guest_state(&g);
   if (g_rt.prev_valid && g.player_object) {
@@ -401,6 +432,14 @@ void arwing64_post_frame(void) {
   g_rt.prev_yaw = g.player_yaw;
   g_rt.prev_roll = g.player_roll;
   g_rt.prev_valid = g.player_object != 0;
+  if (g_rt.force_wing >= 0) g.wing_state = (uint8_t)(g_rt.force_wing & 3);
+  if (g_rt.force_roll != 0) {
+    g.roll_velocity = (int8_t)g_rt.force_roll;
+    g.rolling = 1;
+  }
+  if (g_rt.force_boost > 0) g.boosting = 1;
+  if (g_rt.force_brake > 0) g.braking = 1;
+  if (g_rt.force_flash > 0) g.flash_count = (uint8_t)g_rt.force_flash;
   g_rt.guest = g;
   g_rt.frame_counter++;
   /* Flap deflection follows the stick like the N64 game: pitch input moves
@@ -645,6 +684,37 @@ int arwing64_debug_command(const char *args, Arwing64SendLine send_line) {
     send_line(line);
     return 1;
   }
-  send_line("arwing64: usage arwing [status|state|cache|patch]");
+  if (strcmp(args, "audio") == 0) {
+    const Arwing64AudioStats *a = arwing64_audio_stats();
+    snprintf(line, sizeof(line),
+             "arwing64 audio enabled=%d clips=%d missing=%d played=%u "
+             "consumed=%u passed=%u last_id=%02x engine_byte=%02x loop=%d dir=%s",
+             a->enabled, a->clips_loaded, a->clips_missing, a->cues_played,
+             a->snes_sfx_consumed, a->snes_sfx_passed, a->last_snes_id,
+             a->last_engine_byte, a->engine_loop_active,
+             a->cache_audio_dir[0] ? a->cache_audio_dir : "-");
+    send_line(line);
+    return 1;
+  }
+  if (strncmp(args, "force", 5) == 0) {
+    /* arwing force [wing=N] [roll=N] [boost=0|1] [brake=0|1] [flash=N] |
+     * arwing force clear -- presentation-only overrides for capturing the
+     * damage / shield / boost visuals without driving the guest. */
+    const char *p = args + 5;
+    if (strstr(p, "clear")) reset_overrides();
+    const char *tok;
+    if ((tok = strstr(p, "wing="))) g_rt.force_wing = atoi(tok + 5);
+    if ((tok = strstr(p, "roll="))) g_rt.force_roll = atoi(tok + 5);
+    if ((tok = strstr(p, "boost="))) g_rt.force_boost = atoi(tok + 6);
+    if ((tok = strstr(p, "brake="))) g_rt.force_brake = atoi(tok + 6);
+    if ((tok = strstr(p, "flash="))) g_rt.force_flash = atoi(tok + 6);
+    snprintf(line, sizeof(line),
+             "arwing64 force wing=%d roll=%d boost=%d brake=%d flash=%d",
+             g_rt.force_wing, g_rt.force_roll, g_rt.force_boost,
+             g_rt.force_brake, g_rt.force_flash);
+    send_line(line);
+    return 1;
+  }
+  send_line("arwing64: usage arwing [status|state|cache|patch|force ...]");
   return 1;
 }
