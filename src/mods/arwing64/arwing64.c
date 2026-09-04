@@ -462,25 +462,6 @@ static int ship_limb_override(void *ctx, int limb, int *dl, HostMeshVec3 *t,
   return 1;
 }
 
-typedef struct SingleListCtx {
-  int list;
-} SingleListCtx;
-
-/* Draw one detached display list (glow, shield) by hiding every limb except
- * the root and pointing the root at the list with a neutral local transform. */
-static int single_list_override(void *ctx, int limb, int *dl, HostMeshVec3 *t,
-                                HostMeshVec3 *r) {
-  const SingleListCtx *c = (const SingleListCtx *)ctx;
-  if (limb != kArwingLimb_Root) {
-    *dl = -1;
-    return 0;
-  }
-  *dl = c->list;
-  t->x = t->y = t->z = 0.0f;
-  r->x = r->y = r->z = 0.0f;
-  return 1;
-}
-
 /* Build R = M^T * A where M is the Enhanced Q15 object*view matrix (points
  * transform as cam = M^T p) and A maps N64 model axes (x right, y up, nose
  * -z) onto Star Fox object axes (x right, y down, nose +z): A = diag(1,-1,-1). */
@@ -489,35 +470,6 @@ static void ship_rotation(const int16_t m_q15[9], float out[9]) {
   for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
       out[i * 3 + j] = ((float)m_q15[j * 3 + i] / 32768.0f) * a[j];
-}
-
-static uint32_t draw_single_list(uint8_t *pixels, size_t pitch, int width,
-                                 int height, const Projection *proj, int list,
-                                 const float model_to_camera[12], float alpha,
-                                 int transparent_black, int supersample) {
-  if (list < 0) return 0;
-  HostMeshDrawParams p;
-  host_mesh_draw_params_init(&p);
-  p.mesh = g_rt.mesh;
-  p.pose = -1;
-  memcpy(p.model_to_camera, model_to_camera, sizeof(p.model_to_camera));
-  p.projection.project = project_starfox;
-  p.projection.ctx = (void *)proj;
-  p.projection.near_z = kNearZ;
-  SingleListCtx ctx = {list};
-  p.override.fn = single_list_override;
-  p.override.ctx = &ctx;
-  p.target = pixels;
-  p.target_pitch = pitch;
-  p.target_width = width;
-  p.target_height = height;
-  p.supersample = supersample;
-  p.flip_winding = 0; /* billboards have no culling */
-  p.ambient = 1.0f;
-  p.diffuse = 0.0f;
-  p.alpha_scale = alpha;
-  p.transparent_black_target = transparent_black;
-  return host_mesh_draw(&p);
 }
 
 uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
@@ -585,30 +537,30 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
     }
   }
   p.transparent_black_target = transparent_black;
-  HostMeshDrawStats stats;
-  p.stats = &stats;
-  uint32_t written = host_mesh_draw(&p);
 
-  /* Engine glow: a camera-facing quad behind the ship, red on planets and
-   * blue in space, sized by boost intensity and flickering like the N64. */
+  /* Detached effect quads share the ship's Z-buffer so the hull occludes
+   * them correctly. */
+  HostMeshExtraList extras[2];
+  int extra_count = 0;
+  /* Engine glow: a camera-facing quad just behind the tail (Star Fox object
+   * -Z), red on planets and blue in space, sized by boost intensity and
+   * flickering between two scales like the N64 game. */
   {
+    const float tail = (71.0f + 10.0f) * kModelScale;
+    const float boost_gain = g->boosting ? 1.15f : (g->braking ? 0.45f : 0.75f);
     float back[3];
-    /* Behind the ship = -Z in Star Fox object space. */
-    const float boost_gain = g->boosting ? 1.0f : (g->braking ? 0.35f : 0.65f);
-    const float depth = (40.0f + 30.0f * (g->boosting ? 1.0f : 0.0f)) * kModelScale;
-    for (int i = 0; i < 3; i++)
-      back[i] = translation[i] - rot[i * 3 + 2] * depth / kModelScale * 1.0f;
+    for (int i = 0; i < 3; i++) back[i] = translation[i] - rot[i * 3 + 2] * tail;
     const float flicker = (g_rt.frame_counter & 1u) ? 0.9f : 0.81f;
     const float s = kModelScale * flicker * boost_gain;
     const float identity[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-    float m[12];
-    host_mesh_matrix_compose(m, identity, s, back);
     const int orb = g_rt.list_orb[(g->gamemode & 1) ? 1 : 0];
-    if (back[2] > kNearZ &&
-        draw_single_list(pixels, pitch, width, height, &proj, orb, m,
-                         g->boosting ? 1.0f : 0.8f, transparent_black,
-                         supersample))
+    if (orb >= 0 && back[2] > kNearZ) {
+      HostMeshExtraList *x = &extras[extra_count++];
+      x->display_list = orb;
+      host_mesh_matrix_compose(x->model_to_camera, identity, s, back);
+      x->alpha_scale = g->boosting ? 1.0f : 0.85f;
       g_rt.stats.glow_draws++;
+    }
   }
   /* Barrel roll shield: spins about the view axis, fades with the roll. */
   if (g->rolling && g_rt.list_shield >= 0) {
@@ -616,13 +568,18 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
     const float ang = (float)g_rt.frame_counter * 20.0f * dir * 3.14159265f / 180.0f;
     const float c = cosf(ang), sn = sinf(ang);
     const float spin[9] = {c, -sn, 0, sn, c, 0, 0, 0, 1};
-    float m[12];
-    host_mesh_matrix_compose(m, spin, 2.0f * kModelScale, translation);
-    const float alpha = fminf(1.0f, fabsf((float)g->roll_velocity) / 32.0f);
-    if (draw_single_list(pixels, pitch, width, height, &proj, g_rt.list_shield,
-                         m, alpha, transparent_black, supersample))
-      g_rt.stats.shield_draws++;
+    HostMeshExtraList *x = &extras[extra_count++];
+    x->display_list = g_rt.list_shield;
+    host_mesh_matrix_compose(x->model_to_camera, spin, 2.0f * kModelScale,
+                             translation);
+    x->alpha_scale = fminf(1.0f, fabsf((float)g->roll_velocity) / 32.0f);
+    g_rt.stats.shield_draws++;
   }
+  p.extra_lists = extras;
+  p.extra_list_count = extra_count;
+  HostMeshDrawStats stats;
+  p.stats = &stats;
+  uint32_t written = host_mesh_draw(&p);
   g_rt.stats.frames_drawn++;
   g_rt.stats.last_pixels = written;
   g_rt.stats.last_triangles = stats.triangles_rasterised;

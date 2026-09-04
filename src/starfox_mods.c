@@ -77,12 +77,6 @@ static const StarFoxModFeatureInfo kStarFoxModFeatures[] = {
   },
 };
 
-static const StarFoxChoice kArwingSupersampleChoices[] = {
-  { "1", "Off (1x)" },
-  { "2", "2x supersampling" },
-  { "3", "3x supersampling" },
-  { "4", "4x supersampling" },
-};
 
 typedef struct StarFoxChoice {
   const char *value;
@@ -117,6 +111,12 @@ static const StarFoxChoice kPresentationFpsChoices[] = {
   { "240", "240 FPS" },
   { "360", "360 FPS" },
   { "480", "480 FPS" },
+};
+static const StarFoxChoice kArwingSupersampleChoices[] = {
+  { "1", "Off (1x)" },
+  { "2", "2x supersampling" },
+  { "3", "3x supersampling" },
+  { "4", "4x supersampling" },
 };
 
 static StarFoxLauncherModsContext g_starfox_mods_context;
