@@ -755,6 +755,54 @@ extern "C" void StarFoxEnhancedInterpolateMatrixQ15(const int16_t previous[9],
     out[i] = interpolated[i];
 }
 
+extern "C" int StarFoxEnhancedComputeShapeMatrix(
+    const uint8_t *rom, size_t rom_size,
+    const StarFoxEnhancedNativeShapePose *pose, int16_t out_q15[9]) {
+  if (!rom || rom_size == 0 || !pose || !out_q15)
+    return 0;
+  try {
+    auto &assets = shape_assets_for_rom(rom, rom_size);
+    if (!assets.trigonometry)
+      return 0;
+    const auto current_pitch = pose->use_interpolated_object_matrix
+                                   ? pose->source_pitch
+                                   : pose->pitch;
+    const auto current_yaw =
+        pose->use_interpolated_object_matrix ? pose->source_yaw : pose->yaw;
+    const auto current_roll = pose->use_interpolated_object_matrix
+                                  ? pose->source_roll
+                                  : pose->roll;
+    const auto current_object_matrix = starfox::simulation::transpose_q15(
+        starfox::simulation::rotation_matrix_q15(
+            *assets.trigonometry, negated_source_angle(current_pitch),
+            negated_source_angle(current_yaw),
+            negated_source_angle(current_roll)));
+    auto object_matrix = current_object_matrix;
+    if (pose->use_interpolated_object_matrix) {
+      const auto previous_object_matrix = starfox::simulation::transpose_q15(
+          starfox::simulation::rotation_matrix_q15(
+              *assets.trigonometry,
+              negated_source_angle(pose->previous_source_pitch),
+              negated_source_angle(pose->previous_source_yaw),
+              negated_source_angle(pose->previous_source_roll)));
+      object_matrix = starfox::simulation::interpolate_rotation_matrix_q15(
+          previous_object_matrix, current_object_matrix,
+          static_cast<double>(std::min<std::uint16_t>(
+              pose->object_matrix_alpha_q8, 256u)) /
+              256.0);
+    }
+    const auto final_matrix = pose->use_source_view_matrix
+        ? starfox::simulation::multiply_matrix_q15(object_matrix,
+                                                   matrix_from_pose(pose))
+        : object_matrix;
+    for (std::size_t i = 0; i < 9; ++i)
+      out_q15[i] = final_matrix[i];
+    return 1;
+  } catch (const std::exception &) {
+    return 0;
+  }
+}
+
 extern "C" int
 StarFoxEnhancedDrawNativeShape(uint8_t *pixels, size_t pitch, int width,
                                int height, const uint8_t *rom, size_t rom_size,

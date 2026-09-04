@@ -66,6 +66,13 @@ unsigned StarFoxEnhancedDrawGameplayHudMeters(
     uint8_t *pixels, size_t pitch, int width, int height,
     uint16_t widescreen_extra, uint8_t damage, uint8_t boost, int shield_up,
     int enabled, uint8_t boss_health, uint8_t boss_max_health);
+/* Compute the Q15 object*view matrix StarFoxEnhancedDrawNativeShape uses to
+ * transform shape points (camera = M^T * point + pose xyz). Used by host
+ * models drawn at a source object's slot (Arwing64). Returns 0 on failure. */
+int StarFoxEnhancedComputeShapeMatrix(const uint8_t *rom, size_t rom_size,
+                                      const StarFoxEnhancedNativeShapePose *pose,
+                                      int16_t out_q15[9]);
+
 int StarFoxEnhancedDrawNativeShape(uint8_t *pixels, size_t pitch, int width,
                                    int height, const uint8_t *rom,
                                    size_t rom_size, uint16_t shape_address,

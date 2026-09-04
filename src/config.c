@@ -602,6 +602,20 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
   } else if (section == 4) {
     if (StringEqualsNoCase(key, "GodMode")) {
       return ParseBool(value, &g_config.god_mode);
+    } else if (StringEqualsNoCase(key, "Arwing64")) {
+      return ParseBool(value, &g_config.arwing64_enabled);
+    } else if (StringEqualsNoCase(key, "Arwing64Rom")) {
+      snprintf(g_config.arwing64_rom_path, sizeof(g_config.arwing64_rom_path),
+               "%s", value);
+      return true;
+    } else if (StringEqualsNoCase(key, "Arwing64Supersample")) {
+      char *end = NULL;
+      long v = strtol(value, &end, 10);
+      if (end == value || v < 1 || v > 4) return false;
+      g_config.arwing64_supersample = (uint8)v;
+      return true;
+    } else if (StringEqualsNoCase(key, "Arwing64Sfx")) {
+      return ParseBool(value, &g_config.arwing64_sfx);
     } else if (StringEqualsNoCase(key, "GodNuke")) {
       return ParseBool(value, &g_config.god_nuke);
     }
@@ -735,7 +749,7 @@ void ConfigReloadKeyMap(const char *filename) {
 typedef struct CfgKV {
   const char *section;
   const char *key;
-  char val[128];
+  char val[1024];
   int done;
 } CfgKV;
 
@@ -807,6 +821,10 @@ void WriteConfigFile(const char *filename) {
     { "Graphics",   "LinearFiltering" },
     { "Features",   "GodMode" },
     { "Features",   "GodNuke" },
+    { "Features",   "Arwing64" },
+    { "Features",   "Arwing64Rom" },
+    { "Features",   "Arwing64Supersample" },
+    { "Features",   "Arwing64Sfx" },
     { "Sound",      "EnableAudio" },
     { "Sound",      "AudioFreq" },
     { "GamepadMap", "EnableGamepad1" },
@@ -854,19 +872,26 @@ void WriteConfigFile(const char *filename) {
   snprintf(kvs[9].val, sizeof(kvs[9].val), "%d",
            g_config.god_nuke ? 1 : 0);
   snprintf(kvs[10].val, sizeof(kvs[10].val), "%d",
-           g_config.enable_audio ? 1 : 0);
-  snprintf(kvs[11].val, sizeof(kvs[11].val), "%u", g_config.audio_freq);
-  snprintf(kvs[12].val, sizeof(kvs[12].val), "%s",
-           g_config.enable_gamepad[0] ? "true" : "false");
-  snprintf(kvs[13].val, sizeof(kvs[13].val), "%s",
-           g_config.enable_gamepad[1] ? "true" : "false");
+           g_config.arwing64_enabled ? 1 : 0);
+  snprintf(kvs[11].val, sizeof(kvs[11].val), "%s", g_config.arwing64_rom_path);
+  snprintf(kvs[12].val, sizeof(kvs[12].val), "%u",
+           g_config.arwing64_supersample ? g_config.arwing64_supersample : 2);
+  snprintf(kvs[13].val, sizeof(kvs[13].val), "%d",
+           g_config.arwing64_sfx ? 1 : 0);
   snprintf(kvs[14].val, sizeof(kvs[14].val), "%d",
+           g_config.enable_audio ? 1 : 0);
+  snprintf(kvs[15].val, sizeof(kvs[15].val), "%u", g_config.audio_freq);
+  snprintf(kvs[16].val, sizeof(kvs[16].val), "%s",
+           g_config.enable_gamepad[0] ? "true" : "false");
+  snprintf(kvs[17].val, sizeof(kvs[17].val), "%s",
+           g_config.enable_gamepad[1] ? "true" : "false");
+  snprintf(kvs[18].val, sizeof(kvs[18].val), "%d",
            g_config.gamepad_deadzone);
-  snprintf(kvs[15].val, sizeof(kvs[15].val), "%d",
+  snprintf(kvs[19].val, sizeof(kvs[19].val), "%d",
            g_config.presentation_fps ? g_config.presentation_fps : 60);
-  snprintf(kvs[16].val, sizeof(kvs[16].val), "%d",
+  snprintf(kvs[20].val, sizeof(kvs[20].val), "%d",
            g_config.show_fps ? 1 : 0);
-  snprintf(kvs[17].val, sizeof(kvs[17].val), "%d",
+  snprintf(kvs[21].val, sizeof(kvs[21].val), "%d",
            g_config.skip_launcher ? 1 : 0);
 
   char *data = NULL;

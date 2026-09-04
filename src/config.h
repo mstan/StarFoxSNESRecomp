@@ -80,6 +80,12 @@ typedef struct Config {
   uint8 widescreen_hud_bg_y1;
   uint8 crosshair_color;
   bool god_mode;
+  /* Arwing64: draw the Star Fox 64 Arwing in place of the Super FX player
+   * ship. Assets are extracted at run time from the user's own SF64 ROM. */
+  bool arwing64_enabled;
+  char arwing64_rom_path[1024];
+  uint8 arwing64_supersample; /* 1..4 */
+  bool arwing64_sfx;
   bool god_nuke;
   uint16 presentation_fps;
   bool show_fps;

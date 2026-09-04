@@ -8,6 +8,7 @@
 #include "snes/snes.h"
 #include "snes/superfx.h"
 #include "starfox_enhanced_native.h"
+#include "mods/arwing64/arwing64.h"
 
 #include "stb_image_write.h"
 
@@ -1017,7 +1018,8 @@ void StarFoxEnhancedLatchSourceFrame(void) {
   starfox_enhanced_register_debug_commands();
   memset(&snapshot, 0, sizeof(snapshot));
 
-  if (!g_config.enhanced_renderer || !native_shape_overlay_enabled() || !cart ||
+  if ((!g_config.enhanced_renderer && !arwing64_wants_enhanced_frame()) ||
+      !native_shape_overlay_enabled() || !cart ||
       !cart->rom || !cart->romSize)
     goto done;
 
@@ -1324,6 +1326,24 @@ static unsigned draw_gameplay_hud_meters(uint8_t *pixels, size_t pitch,
       source_snapshot_current(), gsu_byte(kGsuBossHp), gsu_byte(kGsuBossMaxHp));
 }
 
+/* Arwing64: the player's slot is drawn by the host model instead of the
+ * Super FX shape. g_arwing_drawn_native records whether the ship landed in
+ * the native-world scratch this frame so StarFoxEnhancedRenderFrame can draw
+ * it again over the stock frame when the native world is not composited. */
+static int g_arwing_drawn_native;
+
+static int arwing64_player_pose(uint16_t ws_extra,
+                                StarFoxEnhancedNativeShapePose *pose) {
+  if (!source_snapshot_current())
+    return 0;
+  const NativeSourceObject *player =
+      source_snapshot_object_by_handle(&g_source_snapshot, (uint8_t)kPlayerHandle);
+  if (!player)
+    return 0;
+  fill_native_shape_pose(pose, player, ws_extra, 0);
+  return 1;
+}
+
 static unsigned draw_native_shape_object(uint8_t *pixels, size_t pitch,
                                          int width, int height,
                                          const Cart *cart, uint16_t ws_extra,
@@ -1336,6 +1356,17 @@ static unsigned draw_native_shape_object(uint8_t *pixels, size_t pitch,
   if (renderer_stats)
     renderer_stats->candidates++;
   fill_native_shape_pose(&pose, object, ws_extra, shadow);
+  if (!shadow && object->handle == kPlayerHandle && arwing64_active()) {
+    const uint32_t written = arwing64_draw_player(
+        pixels, pitch, width, height, cart->rom, cart->romSize, &pose, 1);
+    g_arwing_drawn_native = 1;
+    if (renderer_stats) {
+      renderer_stats->filled_pixels += written;
+      if (written)
+        renderer_stats->drawn++;
+    }
+    return written ? 1u : 0u;
+  }
   const int shape_visible = StarFoxEnhancedDrawNativeShape(
       pixels, pitch, width, height, cart->rom, cart->romSize, object->shape,
       &pose, &stats);
@@ -1628,6 +1659,9 @@ static int starfox_enhanced_debug_command(const char *cmd, const char *args,
   (void)args;
   if (!cmd || !send_line)
     return 0;
+  if (strcmp(cmd, "arwing") == 0) {
+    return arwing64_debug_command(args, send_line);
+  }
   if (strcmp(cmd, "status") == 0 || strcmp(cmd, "state") == 0) {
     debug_send_status(send_line);
     return 1;
@@ -2007,8 +2041,24 @@ RtlEnhancedRenderResult
 StarFoxEnhancedRenderFrame(RtlEnhancedRendererFrame *frame) {
   if (!frame)
     return kRtlEnhancedRender_NotHandled;
+  if (!g_config.enhanced_renderer) {
+    /* Authentic presentation: the stock PPU renderer owns the frame. The
+     * Arwing64 ship is composited over it in the post pass. */
+    if (!frame->default_renderer_done)
+      return kRtlEnhancedRender_NotHandled;
+    if (arwing64_active()) {
+      Cart *cart = g_snes ? g_snes->cart : NULL;
+      StarFoxEnhancedNativeShapePose pose;
+      if (cart && cart->rom && arwing64_player_pose(frame->widescreen_extra, &pose))
+        arwing64_draw_player(frame->pixels, frame->pitch, frame->width,
+                             frame->height, cart->rom, cart->romSize, &pose, 0);
+      maybe_dump_frame(frame);
+    }
+    return kRtlEnhancedRender_Handled;
+  }
   if (frame->default_renderer_done)
     return kRtlEnhancedRender_Handled;
+  g_arwing_drawn_native = 0;
   const bool shape_overlay_enabled = native_shape_overlay_enabled();
   NativeRendererStats stats;
   size_t native_world_pitch = 0;
@@ -2076,6 +2126,15 @@ StarFoxEnhancedRenderFrame(RtlEnhancedRendererFrame *frame) {
     if (suppress_superfx_world_bg1 || mode2_native_overlay) {
       composite_bgra_nonzero(frame->pixels, frame->pitch, native_world,
                              native_world_pitch, frame->width, frame->height);
+    } else if (arwing64_active()) {
+      /* Native world not shown this frame: the guest ship is patched out, so
+       * draw the host Arwing straight over the stock frame at its slot. */
+      Cart *cart = g_snes ? g_snes->cart : NULL;
+      StarFoxEnhancedNativeShapePose pose;
+      if (cart && cart->rom &&
+          arwing64_player_pose(frame->widescreen_extra, &pose))
+        arwing64_draw_player(frame->pixels, frame->pitch, frame->width,
+                             frame->height, cart->rom, cart->romSize, &pose, 0);
     }
     if (gameplay_hud_frame) {
       const unsigned meter_pixels = draw_gameplay_hud_meters(

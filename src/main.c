@@ -27,6 +27,7 @@
 #include "common_cpu_infra.h"
 #include "framedump.h"
 #include "config.h"
+#include "mods/arwing64/arwing64.h"
 #include "util.h"
 #include "starfox_mods.h"
 #include "starfox_spc_player.h"
@@ -358,7 +359,7 @@ static void RtlDrawDefaultPpuFrame(uint8 *pixel_buffer, size_t pitch,
 static RtlEnhancedRenderResult RtlTryEnhancedRenderFrame(
     uint8 *pixel_buffer, size_t pitch, uint32 render_flags,
     int default_renderer_done) {
-  if (!g_config.enhanced_renderer ||
+  if ((!g_config.enhanced_renderer && !arwing64_wants_enhanced_frame()) ||
       !g_rtl_game_info || !g_rtl_game_info->enhanced_render_frame)
     return kRtlEnhancedRender_NotHandled;
   RtlEnhancedRendererFrame frame;

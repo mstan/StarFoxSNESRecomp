@@ -3,6 +3,8 @@
 #if defined(RECOMP_LAUNCHER)
 #include "config.h"
 #include "util.h"
+#include "mods/arwing64/arwing64.h"
+#include "mods/arwing64/sf64_rom.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +30,7 @@ enum {
   kStarFoxModFeature_GodNuke,
   kStarFoxModFeature_PresentationFps,
   kStarFoxModFeature_ShowFps,
+  kStarFoxModFeature_Arwing64,
   kStarFoxModFeature_Count,
 };
 
@@ -65,6 +68,20 @@ static const StarFoxModFeatureInfo kStarFoxModFeatures[] = {
     "show_fps", "Show FPS", "Presentation",
     "Show the measured host presentation rate in the window title."
   },
+  {
+    "arwing64", "Star Fox 64 Arwing", "Character",
+    "Replace the Super FX player ship with the Star Fox 64 Arwing (model, "
+    "wing damage, engine glow, barrel-roll shield). Gameplay is untouched. "
+    "Requires your own Star Fox 64 (USA) Rev A / v1.1 ROM; assets are "
+    "extracted into arwing64_cache next to the game and never redistributed."
+  },
+};
+
+static const StarFoxChoice kArwingSupersampleChoices[] = {
+  { "1", "Off (1x)" },
+  { "2", "2x supersampling" },
+  { "3", "3x supersampling" },
+  { "4", "4x supersampling" },
 };
 
 typedef struct StarFoxChoice {
@@ -237,6 +254,7 @@ static bool feature_enabled(int index) {
   case kStarFoxModFeature_PresentationFps:
     return g_config.presentation_fps != 60;
   case kStarFoxModFeature_ShowFps: return g_config.show_fps;
+  case kStarFoxModFeature_Arwing64: return g_config.arwing64_enabled;
   default: return false;
   }
 }
@@ -246,6 +264,7 @@ static int feature_option_count(int index) {
   case kStarFoxModFeature_EnhancedWidescreen:
   case kStarFoxModFeature_CrosshairColor:
   case kStarFoxModFeature_PresentationFps:
+  case kStarFoxModFeature_Arwing64:
     return 1;
   default:
     return 0;
@@ -278,6 +297,15 @@ static int feature_enable(void *ctx, const char *package_id,
     break;
   case kStarFoxModFeature_ShowFps:
     g_config.show_fps = enabled != 0;
+    break;
+  case kStarFoxModFeature_Arwing64:
+    if (enabled && !g_config.arwing64_rom_path[0]) {
+      if (mod_ctx)
+        mod_copy(mod_ctx->error, sizeof(mod_ctx->error),
+                 "Select your Star Fox 64 (USA) v1.1 ROM first.");
+      return 0;
+    }
+    g_config.arwing64_enabled = enabled != 0;
     break;
   default:
     return 0;
@@ -376,6 +404,16 @@ static int feature_option_get(void *ctx, const char *package_id,
     mod_copy(out->default_value, sizeof(out->default_value), "Original");
     out->choice_count = (int)countof(kCrosshairChoices);
     return 1;
+  case kStarFoxModFeature_Arwing64:
+    mod_copy(out->id, sizeof(out->id), "supersample");
+    mod_copy(out->label, sizeof(out->label), "Anti-aliasing");
+    mod_copy(out->description, sizeof(out->description),
+             "Supersampling factor for the host-rendered Arwing.");
+    snprintf(out->value, sizeof(out->value), "%u",
+             g_config.arwing64_supersample ? g_config.arwing64_supersample : 2);
+    mod_copy(out->default_value, sizeof(out->default_value), "2");
+    out->choice_count = (int)countof(kArwingSupersampleChoices);
+    return 1;
   case kStarFoxModFeature_PresentationFps:
     mod_copy(out->id, sizeof(out->id), "fps");
     mod_copy(out->label, sizeof(out->label), "FPS");
@@ -413,6 +451,10 @@ static int feature_choice_get(void *ctx, const char *package_id,
              StringEqualsNoCase(option_id, "fps")) {
     choices = kPresentationFpsChoices;
     n = (int)countof(kPresentationFpsChoices);
+  } else if (fi == kStarFoxModFeature_Arwing64 &&
+             StringEqualsNoCase(option_id, "supersample")) {
+    choices = kArwingSupersampleChoices;
+    n = (int)countof(kArwingSupersampleChoices);
   } else {
     return 0;
   }
@@ -452,6 +494,14 @@ static int feature_set_option(void *ctx, const char *package_id,
     sync_settings(ctx);
     return 1;
   }
+  if (fi == kStarFoxModFeature_Arwing64 &&
+      StringEqualsNoCase(option_id, "supersample")) {
+    char *end = NULL;
+    long v = strtol(value, &end, 10);
+    if (end == value || v < 1 || v > 4) return 0;
+    g_config.arwing64_supersample = (uint8)v;
+    return 1;
+  }
   if (fi == kStarFoxModFeature_CrosshairColor &&
       StringEqualsNoCase(option_id, "color")) {
     for (int i = 0; i < (int)countof(kCrosshairChoices); i++) {
@@ -479,6 +529,91 @@ static int diagnostic_count(void *ctx, const char *package_id,
                             const char *feature_id) {
   (void)ctx; (void)package_id; (void)feature_id;
   return 0;
+}
+
+/* Owner resource: the user's Star Fox 64 ROM. The verdict is cached per path
+ * so the launcher can poll without re-hashing 12 MiB every frame. */
+static char s_arwing_rom_verdict_path[1024];
+static int s_arwing_rom_verdict_ok;
+static char s_arwing_rom_verdict_status[256];
+
+static void arwing_rom_verify(const char *path) {
+  if (strcmp(path, s_arwing_rom_verdict_path) == 0) return;
+  mod_copy(s_arwing_rom_verdict_path, sizeof(s_arwing_rom_verdict_path), path);
+  s_arwing_rom_verdict_ok = 0;
+  if (!path[0]) {
+    mod_copy(s_arwing_rom_verdict_status, sizeof(s_arwing_rom_verdict_status),
+             "Required: select your Star Fox 64 (USA) v1.1 ROM");
+    return;
+  }
+  Sf64Rom rom;
+  const char *err = NULL;
+  if (sf64_rom_load(&rom, path, &err)) {
+    sf64_rom_free(&rom);
+    s_arwing_rom_verdict_ok = 1;
+    mod_copy(s_arwing_rom_verdict_status, sizeof(s_arwing_rom_verdict_status),
+             "Verified: Star Fox 64 (USA) Rev A");
+  } else {
+    mod_copy(s_arwing_rom_verdict_status, sizeof(s_arwing_rom_verdict_status),
+             err ? err : "Not a Star Fox 64 (USA) v1.1 ROM");
+  }
+}
+
+static int feature_resource_count(void *ctx, const char *package_id,
+                                  const char *feature_id) {
+  (void)ctx;
+  if (!package_id || !StringEqualsNoCase(package_id, kStarFoxModsPackageId))
+    return 0;
+  return feature_index(feature_id) == kStarFoxModFeature_Arwing64 ? 1 : 0;
+}
+
+static int feature_resource_get(void *ctx, const char *package_id,
+                                const char *feature_id, int index,
+                                RecompLauncherCModResource *out) {
+  (void)ctx;
+  if (!out || index != 0 || !package_id ||
+      !StringEqualsNoCase(package_id, kStarFoxModsPackageId) ||
+      feature_index(feature_id) != kStarFoxModFeature_Arwing64)
+    return 0;
+  memset(out, 0, sizeof(*out));
+  mod_copy(out->id, sizeof(out->id), "starfox64-us-v11");
+  mod_copy(out->label, sizeof(out->label), "Star Fox 64 (USA) v1.1 ROM");
+  mod_copy(out->description, sizeof(out->description),
+           "Your own Star Fox 64 (USA) Rev A / v1.1 cartridge dump "
+           "(.z64/.v64/.n64). Only the Arwing assets are read from it.");
+  mod_copy(out->path, sizeof(out->path), g_config.arwing64_rom_path);
+  mod_copy(out->file_patterns, sizeof(out->file_patterns), "*.z64,*.v64,*.n64");
+  mod_copy(out->file_description, sizeof(out->file_description),
+           "Nintendo 64 ROM");
+  mod_copy(out->format, sizeof(out->format), "file");
+  out->required = 1;
+  arwing_rom_verify(g_config.arwing64_rom_path);
+  mod_copy(out->status, sizeof(out->status), s_arwing_rom_verdict_status);
+  out->verified = s_arwing_rom_verdict_ok;
+  return 1;
+}
+
+static int feature_resource_set_path(void *ctx, const char *package_id,
+                                     const char *feature_id,
+                                     const char *resource_id,
+                                     const char *path) {
+  StarFoxLauncherModsContext *mod_ctx = (StarFoxLauncherModsContext *)ctx;
+  if (!package_id || !StringEqualsNoCase(package_id, kStarFoxModsPackageId) ||
+      feature_index(feature_id) != kStarFoxModFeature_Arwing64 ||
+      !resource_id || !StringEqualsNoCase(resource_id, "starfox64-us-v11") ||
+      !path)
+    return 0;
+  if (mod_ctx) mod_ctx->error[0] = 0;
+  mod_copy(g_config.arwing64_rom_path, sizeof(g_config.arwing64_rom_path), path);
+  s_arwing_rom_verdict_path[0] = 0; /* force re-verify */
+  arwing_rom_verify(g_config.arwing64_rom_path);
+  if (!s_arwing_rom_verdict_ok) {
+    g_config.arwing64_enabled = false;
+    if (mod_ctx)
+      mod_copy(mod_ctx->error, sizeof(mod_ctx->error),
+               s_arwing_rom_verdict_status);
+  }
+  return 1;
 }
 
 static int diagnostic_get(void *ctx, const char *package_id,
@@ -518,6 +653,9 @@ const RecompLauncherCModProvider *StarFoxLauncherModsProvider(
   provider.feature_set_option = feature_set_option;
   provider.diagnostic_count = diagnostic_count;
   provider.diagnostic_get = diagnostic_get;
+  provider.feature_resource_count = feature_resource_count;
+  provider.feature_resource_get = feature_resource_get;
+  provider.feature_resource_set_path = feature_resource_set_path;
   provider.archive_extension = ".snesmod";
   provider.archive_description = "SNESRecomp mod package (.snesmod)";
   provider.commit_netplay = commit_mods;

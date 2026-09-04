@@ -59,6 +59,11 @@ add_executable(StarFoxSNESRecomp
   src/starfox_cpu_infra.c
   src/starfox_rtl.c
   src/starfox_spc_player.c
+  src/mods/arwing64/arwing64.c
+  src/mods/arwing64/arwing64_extract.c
+  src/mods/arwing64/sf64_assets.c
+  src/mods/arwing64/sf64_rom.c
+  src/mods/arwing64/sha1.c
   third_party/gl_core/gl_core_3_1.c
   $<TARGET_OBJECTS:StarFoxEnhancedNativeRenderer>
   ${STARFOX_GEN_SOURCES}
@@ -66,6 +71,7 @@ add_executable(StarFoxSNESRecomp
 
 target_include_directories(StarFoxSNESRecomp PRIVATE
   ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/recomp
+  ${CMAKE_SOURCE_DIR}/src/mods/arwing64
   ${CMAKE_SOURCE_DIR}/third_party/stb
   ${CMAKE_SOURCE_DIR}/recomp-ui/src/third_party
   ${CMAKE_SOURCE_DIR}/third_party/starfox-enhanced/include

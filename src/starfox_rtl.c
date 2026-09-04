@@ -13,6 +13,7 @@
 #include "snes/snes.h"
 #include "snes/superfx.h"
 #include "starfox_enhanced_renderer.h"
+#include "mods/arwing64/arwing64.h"
 
 uint16 counter_global_frames;
 
@@ -345,6 +346,7 @@ void StarFoxEnhancedPreFrame(uint32 inputs) {
 
 void StarFoxEnhancedPostFrame(uint32 inputs) {
   StarFoxEnhancedLatchSourceFrame();
+  arwing64_post_frame();
   (void)inputs;
   starfox_restore_superfx_crosshair_tint();
   if (!g_config.god_mode) {
