@@ -248,13 +248,14 @@ int main(int argc, char **argv) {
   ov.list_broken_a = host_mesh_find_display_list(mesh, "aAwRightWingBrokenDL");
   ov.list_broken_b = host_mesh_find_display_list(mesh, "aAwLeftWingBrokenDL");
   int ok = 1;
-  /* Camera convention: yaw 0 looks at the nose (nose is -Z in model space and
-   * the camera sits at +Z), yaw 180 looks from behind the tail. */
-  snprintf(path, sizeof(path), "%s/preview_front.png", out_dir);
-  ok &= render_preview(mesh, path, 0.0f, 0.0f, pose, ss, NULL);
+  /* Camera convention: the camera sits on +Z looking toward -Z. The nose is
+   * -Z in model space, so yaw 0 sees the tail (rear view) and yaw 180 sees
+   * the nose (front view; the viewer's left is the ship's starboard wing). */
   snprintf(path, sizeof(path), "%s/preview_rear.png", out_dir);
+  ok &= render_preview(mesh, path, 0.0f, 0.0f, pose, ss, NULL);
+  snprintf(path, sizeof(path), "%s/preview_front.png", out_dir);
   ok &= render_preview(mesh, path, 180.0f, 0.0f, pose, ss, NULL);
-  snprintf(path, sizeof(path), "%s/preview_rear_broken.png", out_dir);
+  snprintf(path, sizeof(path), "%s/preview_front_broken.png", out_dir);
   ok &= render_preview(mesh, path, 180.0f, 10.0f, pose, ss, &ov);
   snprintf(path, sizeof(path), "%s/preview_side.png", out_dir);
   ok &= render_preview(mesh, path, 90.0f, 0.0f, pose, ss, NULL);
