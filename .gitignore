@@ -56,3 +56,12 @@ _triage/
 /build-arwing/
 /build-tool/
 /_regen.log
+
+# Owner-supplied N64 ROMs and extracted audio/mesh caches, at any depth.
+*.z64
+*.v64
+*.n64
+arwing64_cache/
+sfx_*.wav
+*.pcm
+*.adpcm

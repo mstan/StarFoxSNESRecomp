@@ -9,8 +9,8 @@
  * pitch follows boost/brake. Everything else the SPC plays is untouched.
  *
  * Clips come from the Arwing64 cache (audio/<cue>.wav, 16-bit PCM) written
- * by the extractor from the user's own SF64 ROM; a missing or invalid clip
- * disables only that cue.
+ * by the extractor from the user's own SF64 ROM. The complete set is required
+ * when audio is enabled; a missing or invalid clip fails activation closed.
  */
 #pragma once
 
@@ -34,6 +34,7 @@ typedef enum Arwing64Cue {
   kArwingCue_Explosion,
   kArwingCue_ShieldDeflect,
   kArwingCue_Engine, /* looping */
+  kArwingCue_Roll,
   kArwingCue_Count,
 } Arwing64Cue;
 
@@ -52,10 +53,10 @@ typedef struct Arwing64AudioStats {
 
 /* Load clips from <cache_dir>/audio and install the APU observer. Safe to
  * call repeatedly; re-reads only when the directory changes. */
-void arwing64_audio_refresh(const char *cache_dir, int enabled);
+int arwing64_audio_refresh(const char *cache_dir, int enabled);
 
 /* Per presentation frame: keeps the engine loop in step with the guest. */
-void arwing64_audio_frame(void);
+void arwing64_audio_frame(int rolling, int in_mission);
 
 const Arwing64AudioStats *arwing64_audio_stats(void);
 const char *arwing64_cue_name(Arwing64Cue cue);

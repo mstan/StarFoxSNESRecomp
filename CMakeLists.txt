@@ -61,6 +61,7 @@ add_executable(StarFoxSNESRecomp
   src/starfox_spc_player.c
   src/mods/arwing64/arwing64.c
   src/mods/arwing64/arwing64_audio.c
+  src/mods/arwing64/sf64_audio_render.c
   src/mods/arwing64/arwing64_extract.c
   src/mods/arwing64/sf64_assets.c
   src/mods/arwing64/sf64_rom.c
@@ -116,6 +117,8 @@ recomp_target_launcher_ui(StarFoxSNESRecomp
 # game draws. Not shipped in release zips.
 add_executable(arwing64_tool
   tools/arwing64_tool.c
+  src/mods/arwing64/sf64_audio_render.c
+  ${SNESRECOMP_ROOT}/runner/src/sha256.c
   src/mods/arwing64/sha1.c
   src/mods/arwing64/sf64_rom.c
   src/mods/arwing64/sf64_assets.c

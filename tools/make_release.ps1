@@ -87,6 +87,8 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
+New-Item -ItemType Directory -Path (Join-Path $stage 'docs') -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'docs\ARWING64.md') -Destination (Join-Path $stage 'docs')
 Copy-Item -LiteralPath $assets -Destination $stage -Recurse
 # Release-owned mod catalog, when the build stages one. Ships as a nested
 # directory tree, which is exactly what made portable ZIP entry names matter
@@ -105,7 +107,9 @@ if (Test-Path -LiteralPath $kb) {
 # config.ini ships Widescreen = 0 regardless of the repo's working-tree value
 # (a dev may have flipped it locally while testing); the launcher toggles +
 # persists the player's choice at runtime.
-(Get-Content (Join-Path $root 'config.ini')) -replace '^Widescreen\s*=.*$', 'Widescreen = 0' |
+(Get-Content (Join-Path $root 'config.ini')) -replace '^Widescreen\s*=.*$', 'Widescreen = 0' `
+  -replace '^Arwing64\s*=.*$', 'Arwing64 = 0' `
+  -replace '^Arwing64Rom\s*=.*$', 'Arwing64Rom =' |
   Out-File (Join-Path $stage 'config.ini') -Encoding ascii
 
 $runtimeDlls = @(
@@ -142,6 +146,22 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $stagePrefix = $stageFull.TrimEnd('\') + '\'
 $files = @(Get-ChildItem -LiteralPath $stage -File -Recurse |
   Sort-Object FullName)
+# Defense in depth: build/assets and build/mods can contain local files.
+# Reject owner caches even when accidentally nested in either copied tree.
+foreach ($file in $files) {
+  $relative = $file.FullName.Substring($stagePrefix.Length).Replace('\', '/')
+  if ($relative -match '(?i)(^|/)arwing64_cache(/|$)|(^|/)sfx_[^/]*\.wav$|\.(z64|v64|n64|sfc|smc|rom|pcm|adpcm)$') {
+    throw "Owner ROM or extracted asset in release stage: $relative"
+  }
+  $stream = [IO.File]::OpenRead($file.FullName)
+  try {
+    $magic = New-Object byte[] 8
+    if ($stream.Read($magic, 0, 8) -eq 8 -and
+        [Text.Encoding]::ASCII.GetString($magic) -eq 'N64MESHB') {
+      throw "Extracted host mesh in release stage: $relative"
+    }
+  } finally { $stream.Dispose() }
+}
 $archive = [IO.Compression.ZipFile]::Open(
   $zipFull, [IO.Compression.ZipArchiveMode]::Create)
 try {

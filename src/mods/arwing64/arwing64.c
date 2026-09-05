@@ -3,6 +3,7 @@
 #include "arwing64_audio.h"
 #include "arwing64_extract.h"
 #include "sf64_rom.h"
+#include "sf64_audio_render.h"
 
 #include "common_cpu_infra.h"
 #include "common_rtl.h"
@@ -69,6 +70,8 @@ static const float kNearZ = 16.0f;
 
 typedef struct Runtime {
   int refreshed_for_enabled;
+  char configured_rom[1024];
+  int configured_sfx;
   HostMesh *mesh;
   GuardedPatch patch;
   int patch_registered;
@@ -154,8 +157,8 @@ static uint8_t *read_whole_file(const char *path, size_t *size) {
 static int write_whole_file(const char *path, const void *data, size_t size) {
   FILE *f = fopen(path, "wb");
   if (!f) return 0;
-  const int ok = fwrite(data, 1, size, f) == size;
-  fclose(f);
+  int ok = fwrite(data, 1, size, f) == size;
+  if (fclose(f)) ok = 0;
   return ok;
 }
 
@@ -225,6 +228,26 @@ static int build_mesh_from_rom(const char *rom_path) {
   const int have_cache_dir =
       cache_paths(rom.sha1_hex, blob_path, sizeof(blob_path), sidecar_path,
                   sizeof(sidecar_path));
+  if (!have_cache_dir) {
+    sf64_rom_free(&rom); free(rom_bytes);
+    set_status(kArwing64_CacheInvalid, "cannot locate mesh cache"); return 0;
+  }
+  if (g_config.arwing64_sfx) {
+    char dir[512], manifest[600];
+    if (!have_cache_dir || !snesrecomp_exe_dir_path("arwing64_cache", dir, sizeof(dir))) {
+      sf64_rom_free(&rom); free(rom_bytes);
+      set_status(kArwing64_CacheInvalid, "cannot create audio cache"); return 0;
+    }
+    snprintf(manifest, sizeof(manifest), "%s/audio/manifest.sha256", dir);
+    FILE *existing = fopen(manifest, "rb");
+    int had_manifest = existing != NULL;
+    if (existing) fclose(existing);
+    if (!(had_manifest ? sf64_audio_cache_valid(dir) : sf64_audio_extract(&rom, dir, &err))) {
+      sf64_rom_free(&rom); free(rom_bytes);
+      set_status(kArwing64_CacheInvalid, had_manifest ? "audio cache corrupt; remove arwing64_cache to rebuild" : err);
+      return 0;
+    }
+  }
   sf64_rom_free(&rom);
   if (have_cache_dir) {
     snprintf(g_rt.stats.cache_path, sizeof(g_rt.stats.cache_path), "%s",
@@ -232,6 +255,7 @@ static int build_mesh_from_rom(const char *rom_path) {
     size_t blob_size = 0, side_size = 0;
     uint8_t *blob = read_whole_file(blob_path, &blob_size);
     uint8_t *side = read_whole_file(sidecar_path, &side_size);
+    int had_cache = blob != NULL || side != NULL;
     if (blob && side && side_size >= 64) {
       char expected[65];
       memcpy(expected, side, 64);
@@ -244,6 +268,11 @@ static int build_mesh_from_rom(const char *rom_path) {
       free(rom_bytes);
       resolve_lists();
       return 1;
+    }
+    if (had_cache) {
+      free(rom_bytes);
+      set_status(kArwing64_CacheInvalid, "mesh cache corrupt; remove arwing64_cache to rebuild");
+      return 0;
     }
   }
   /* Extract afresh from the ROM image. */
@@ -264,10 +293,12 @@ static int build_mesh_from_rom(const char *rom_path) {
     return 0;
   }
   if (have_cache_dir) {
-    /* Write blob then sidecar; a crash between the two leaves an unverified
-     * blob that is simply re-extracted next time. */
-    if (write_whole_file(blob_path, blob, blob_size))
-      write_whole_file(sidecar_path, g_rt.stats.blob_sha256, 64);
+    /* Write blob then sidecar; an incomplete committed cache fails closed. */
+    if (!write_whole_file(blob_path, blob, blob_size) ||
+        !write_whole_file(sidecar_path, g_rt.stats.blob_sha256, 64)) {
+      free(blob); host_mesh_free(g_rt.mesh); g_rt.mesh = NULL;
+      set_status(kArwing64_CacheInvalid, "cannot write mesh cache"); return 0;
+    }
   }
   free(blob);
   resolve_lists();
@@ -333,6 +364,15 @@ void arwing64_refresh(void) {
     overrides_initialised = 1;
   }
   const int enabled = g_config.arwing64_enabled ? 1 : 0;
+  if (strcmp(g_rt.configured_rom, g_config.arwing64_rom_path) ||
+      g_rt.configured_sfx != (g_config.arwing64_sfx ? 1 : 0)) {
+    arwing64_audio_refresh(NULL, 0);
+    revert_patch();
+    host_mesh_free(g_rt.mesh); g_rt.mesh = NULL;
+    g_rt.stats.cache_path[0] = 0;
+    snprintf(g_rt.configured_rom, sizeof(g_rt.configured_rom), "%s", g_config.arwing64_rom_path);
+    g_rt.configured_sfx = g_config.arwing64_sfx ? 1 : 0;
+  }
   if (!enabled) {
     arwing64_audio_refresh(NULL, 0);
     revert_patch();
@@ -345,13 +385,16 @@ void arwing64_refresh(void) {
     return;
   }
   if (!g_rt.mesh) {
+    /* Cache/ROM failures stay failed until an explicit refresh or toggle.
+     * Do not rehash a bad 12 MiB ROM on every presentation frame. */
+    g_rt.refreshed_for_enabled = 1;
     if (!g_config.arwing64_rom_path[0]) {
       set_status(kArwing64_NoRom, "set Arwing64Rom in config.ini or pick the ROM in the launcher");
       return;
     }
     if (!build_mesh_from_rom(g_config.arwing64_rom_path)) return;
   }
-  if (!apply_patch()) return;
+  if (!apply_patch()) { arwing64_audio_refresh(NULL, 0); return; }
   set_status(kArwing64_Active, NULL);
   g_rt.refreshed_for_enabled = 1;
   {
@@ -362,14 +405,19 @@ void arwing64_refresh(void) {
       snprintf(dir, sizeof(dir), "%s", g_rt.stats.cache_path);
       char *slash = strrchr(dir, '/');
       char *bslash = strrchr(dir, '\\');
-      char *cut = slash > bslash ? slash : bslash;
+      char *cut = !slash ? bslash : !bslash ? slash : slash > bslash ? slash : bslash;
       if (cut) *cut = 0;
     }
-    arwing64_audio_refresh(dir, g_config.arwing64_sfx ? 1 : 0);
+    if (!arwing64_audio_refresh(dir, g_config.arwing64_sfx ? 1 : 0)) {
+      revert_patch();
+      set_status(kArwing64_CacheInvalid, "cannot activate complete SF64 audio set");
+    }
   }
 }
 
 int arwing64_active(void) {
+  if (strcmp(g_rt.configured_rom, g_config.arwing64_rom_path) ||
+      g_rt.configured_sfx != (g_config.arwing64_sfx ? 1 : 0)) arwing64_refresh();
   if (g_config.arwing64_enabled && !g_rt.refreshed_for_enabled) arwing64_refresh();
   if (!g_config.arwing64_enabled && g_rt.mesh) arwing64_refresh();
   return g_rt.stats.status == kArwing64_Active && g_rt.mesh != NULL &&
@@ -421,9 +469,9 @@ void arwing64_read_guest_state(Arwing64GuestState *out) {
 
 void arwing64_post_frame(void) {
   if (!g_config.arwing64_enabled) return;
-  arwing64_audio_frame();
   Arwing64GuestState g;
   arwing64_read_guest_state(&g);
+  arwing64_audio_frame(g.rolling, (g.gameflags2 & 8) != 0 && (g.gameflags & 0xc0) == 0);
   if (g_rt.prev_valid && g.player_object) {
     g.pitch_delta = (int8_t)(g.player_pitch - g_rt.prev_pitch);
     g.roll_delta = (int8_t)(g.player_roll - g_rt.prev_roll);

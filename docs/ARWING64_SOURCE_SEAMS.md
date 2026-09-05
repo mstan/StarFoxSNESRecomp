@@ -109,7 +109,9 @@ Barrel roll has no queued SFX; it is inferred from `$1501`.
 
 ## Enhanced renderer constants that are UltraStarFox addresses (wrong for retail)
 
-Found while proving the seams; tracked under beads-8wg.8.2.
+Found while proving the seams; tracked under beads-8wg.8.2. The listed retail
+address corrections were applied on the Arwing64 branch on 2026-09-05. The
+"Current" column below records the previous UltraStarFox values for comparison.
 
 | Constant | Current | Retail |
 |---|---|---|

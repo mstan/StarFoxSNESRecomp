@@ -71,7 +71,7 @@ static const StarFoxModFeatureInfo kStarFoxModFeatures[] = {
   {
     "arwing64", "Star Fox 64 Arwing", "Character",
     "Replace the Super FX player ship with the Star Fox 64 Arwing (model, "
-    "wing damage, engine glow, barrel-roll shield). Gameplay is untouched. "
+    "wing damage, engine glow, barrel-roll shield and sound effects). "
     "Requires your own Star Fox 64 (USA) Rev A / v1.1 ROM; assets are "
     "extracted into arwing64_cache next to the game and never redistributed."
   },
@@ -264,8 +264,9 @@ static int feature_option_count(int index) {
   case kStarFoxModFeature_EnhancedWidescreen:
   case kStarFoxModFeature_CrosshairColor:
   case kStarFoxModFeature_PresentationFps:
-  case kStarFoxModFeature_Arwing64:
     return 1;
+  case kStarFoxModFeature_Arwing64:
+    return 2;
   default:
     return 0;
   }
@@ -377,11 +378,11 @@ static int feature_option_get(void *ctx, const char *package_id,
                               const char *feature_id, int index,
                               RecompLauncherCModOption *out) {
   (void)ctx;
-  if (!out || index != 0 ||
+  if (!out || index < 0 ||
       !package_id || !StringEqualsNoCase(package_id, kStarFoxModsPackageId))
     return 0;
   const int fi = feature_index(feature_id);
-  if (fi < 0 || !feature_option_count(fi)) return 0;
+  if (fi < 0 || index >= feature_option_count(fi)) return 0;
   memset(out, 0, sizeof(*out));
   out->type = RECOMP_MOD_OPTION_CHOICE;
   out->step = 1;
@@ -405,6 +406,15 @@ static int feature_option_get(void *ctx, const char *package_id,
     out->choice_count = (int)countof(kCrosshairChoices);
     return 1;
   case kStarFoxModFeature_Arwing64:
+    if (index == 1) {
+      mod_copy(out->id, sizeof(out->id), "sfx");
+      mod_copy(out->label, sizeof(out->label), "Star Fox 64 audio");
+      mod_copy(out->description, sizeof(out->description), "Replace Arwing sound effects and engine hum.");
+      mod_copy(out->value, sizeof(out->value), g_config.arwing64_sfx ? "1" : "0");
+      mod_copy(out->default_value, sizeof(out->default_value), "1");
+      out->choice_count = 2;
+      return 1;
+    }
     mod_copy(out->id, sizeof(out->id), "supersample");
     mod_copy(out->label, sizeof(out->label), "Anti-aliasing");
     mod_copy(out->description, sizeof(out->description),
@@ -438,6 +448,7 @@ static int feature_choice_get(void *ctx, const char *package_id,
     return 0;
   const int fi = feature_index(feature_id);
   const StarFoxChoice *choices = NULL;
+  static const StarFoxChoice audio_choices[] = {{"1", "On"}, {"0", "Off"}};
   int n = 0;
   if (fi == kStarFoxModFeature_EnhancedWidescreen &&
       StringEqualsNoCase(option_id, "mode")) {
@@ -451,6 +462,10 @@ static int feature_choice_get(void *ctx, const char *package_id,
              StringEqualsNoCase(option_id, "fps")) {
     choices = kPresentationFpsChoices;
     n = (int)countof(kPresentationFpsChoices);
+  } else if (fi == kStarFoxModFeature_Arwing64 &&
+             StringEqualsNoCase(option_id, "sfx")) {
+    choices = audio_choices;
+    n = (int)countof(audio_choices);
   } else if (fi == kStarFoxModFeature_Arwing64 &&
              StringEqualsNoCase(option_id, "supersample")) {
     choices = kArwingSupersampleChoices;
@@ -493,6 +508,10 @@ static int feature_set_option(void *ctx, const char *package_id,
     }
     sync_settings(ctx);
     return 1;
+  }
+  if (fi == kStarFoxModFeature_Arwing64 && StringEqualsNoCase(option_id, "sfx")) {
+    if (strcmp(value, "0") && strcmp(value, "1")) return 0;
+    g_config.arwing64_sfx = !strcmp(value, "1"); return 1;
   }
   if (fi == kStarFoxModFeature_Arwing64 &&
       StringEqualsNoCase(option_id, "supersample")) {

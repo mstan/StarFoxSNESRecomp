@@ -11,6 +11,7 @@
 #include "arwing64_extract.h"
 #include "host_mesh.h"
 #include "sf64_rom.h"
+#include "sf64_audio_render.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -163,6 +164,33 @@ int main(int argc, char **argv) {
     return 2;
   }
   const char *rom_path = argv[1], *out_dir = argv[2];
+  if (argc >= 4 && (!strcmp(argv[3], "--audio") || !strcmp(argv[3], "--sample") || !strcmp(argv[3], "--verify-audio"))) {
+    Sf64Rom rom; const char *error = NULL;
+    if (!sf64_rom_load(&rom, rom_path, &error)) {
+      fprintf(stderr, "%s\n", error); return 1;
+    }
+    int ok = 0;
+    if (!strcmp(argv[3], "--sample") && argc == 5) {
+      int16_t *pcm = NULL; uint32_t frames = 0;
+      ok = sf64_audio_decode_sample(&rom, (unsigned)atoi(argv[4]), &pcm, &frames, &error);
+      if (ok) {
+        char path[1024]; snprintf(path, sizeof(path), "%s/sample.pcm", out_dir);
+        FILE *f = fopen(path, "wb"); ok = f != NULL;
+        if (f) {
+          for (uint32_t i = 0; i < frames; i++) {
+            uint8_t p[2] = {(uint8_t)pcm[i], (uint8_t)((uint16_t)pcm[i] >> 8)};
+            if (fwrite(p, 1, 2, f) != 2) ok = 0;
+          }
+          if (fclose(f)) ok = 0;
+        }
+      }
+      free(pcm);
+    } else if (!strcmp(argv[3], "--verify-audio")) ok = sf64_audio_cache_valid(out_dir);
+    else ok = sf64_audio_extract(&rom, out_dir, &error);
+    sf64_rom_free(&rom);
+    if (!ok) fprintf(stderr, "audio extraction: %s\n", error ? error : "write failed");
+    return ok ? 0 : 1;
+  }
   const char *pose_name = "wings_half_open";
   const char *break_mode = "both"; /* a | b | both | none */
   int ss = 2, want_json = 0;

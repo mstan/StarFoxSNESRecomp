@@ -13,7 +13,7 @@ enum {
   kKeyMod_Ctrl = 0x1000,
 };
 
-Config g_config;
+Config g_config = {.arwing64_sfx = true};
 
 #define REMAP_SDL_KEYCODE(key) ((key) & SDLK_SCANCODE_MASK ? kKeyMod_ScanCode : 0) | (key) & (kKeyMod_ScanCode - 1)
 #define _(x) REMAP_SDL_KEYCODE(x)
