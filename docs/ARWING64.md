@@ -144,9 +144,11 @@ tests cover four damage shapes, ambiguous/cyclic input, cockpit, changed
 world generations, independently updated HUD and reset invalidation.
 See [the source seam map](ARWING64_SOURCE_SEAMS.md) for the retail addresses.
 
-The engine branch remains based on `a595a41` pending the engine-main regression
-tracked in `beads-8wg.2.27`. Do not rebase this preview onto the regressed main.
-No source branch has been pushed or submitted as a PR for this finish pass.
+The accepted implementation was integrated into local game and engine `main`
+branches on September 5, 2026. The engine retains the working `a595a41` lineage
+pending the published engine-main regression tracked in `beads-8wg.2.27`.
+Do not rebase onto that regressed upstream branch. No source branch has been
+pushed or submitted as a PR for this finish pass.
 Authentic and Enhanced scripted runs through frame 9500 both exited cleanly,
 with 14 clips loaded, 23 mapped requests consumed and a roll cue played.
 Audio on/off full-WRAM comparisons also matched all 19 gameplay checkpoints
@@ -156,9 +158,11 @@ inactive and audio disabled. The local preview ZIP passed packaging; synthetic
 negative tests rejected nested caches, extracted WAV names, ROM names and a
 renamed mesh blob.
 
-Before release: exercise full Corneria runs in
+The owner approved the corrected ship, shots and controls preview on
+September 5, 2026. The README includes an unaltered gameplay capture from that
+implementation. Broader release coverage still requires full Corneria runs in
 both presentation modes (including damage, wing loss, roll, boost/brake,
-cockpit and reset/load), obtain the owner's visual/audio verdict, and run
+cockpit and reset/load), and running
 `tools/make_release.ps1`. Packaging excludes the cache and extractor tool and
 rejects nested owner ROMs, extracted WAVs and mesh blobs. The release config
 always disables Arwing64 and clears the developer's SF64 ROM path.

@@ -44,12 +44,18 @@ stability problems through [GitHub Issues](../../issues).
 
 ## Quick start (Windows release)
 
-The `feat/arwing64` development branch also offers an opt-in **Star Fox 64
-Arwing** with wing damage, glow, roll shield and ship audio, extracted locally
-from your own SF64 US v1.1 ROM. Automated gameplay-state comparisons pass;
-owner playtesting remains before release. See [Arwing64 setup and validation](docs/ARWING64.md). Asset/audio semantics
+The source build also offers an opt-in **Star Fox 64 Arwing** with wing damage,
+glow, roll shield, green/blue lasers and ship audio, extracted locally from your
+own SF64 US v1.1 ROM. It also replaces the controls-screen ship preview.
+Automated gameplay-state comparisons pass, and the owner approved the visual
+playtest on September 5, 2026. See [Arwing64 setup and validation](docs/ARWING64.md). Asset/audio semantics
 are informed by sonicdcer/sf64 (CC0), with Torch (MIT) as a development oracle,
 on the Star Fox Enhanced presentation foundation credited above.
+
+![Star Fox 64 Arwing in Star Fox SNES, with Enhanced 21:9 presentation](docs/images/starfox-arwing64-widescreen.png)
+
+Actual gameplay capture; the ROMs and extracted models, textures and audio are
+not included. Enhanced renderer transition cleanup remains in progress.
 
 1. Download `StarFoxSNESRecomp-windows-0.0.1.zip` from
    [Releases](../../releases) and extract it into a fresh folder.
