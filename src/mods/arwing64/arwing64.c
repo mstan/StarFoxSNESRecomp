@@ -626,6 +626,12 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
   p.target_width = width;
   p.target_height = height;
   p.supersample = supersample;
+  /* The controls demonstration uses a small viewport over the controller
+   * diagram. Apply its scissor to the hull and attached effects together. */
+  if (g_ram[0x1f0d] == 1 && pose->vanish_x == 80 && pose->vanish_y == 64) {
+    p.clip_x = 24 + pose->widescreen_extra;
+    p.clip_y = 24; p.clip_w = 112; p.clip_h = 88;
+  }
   /* The Star Fox projection keeps y pointing down on screen, so the mesh's
    * counter-clockwise front faces arrive clockwise: flip the winding test. */
   p.flip_winding = 1;

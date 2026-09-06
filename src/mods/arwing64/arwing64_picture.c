@@ -29,6 +29,7 @@ typedef struct Picture {
   Replacement replacements[kReplacements];
   unsigned count;
   int player_index;
+  unsigned controls_preview;
 } Picture;
 static Picture pictures[kPictures], pending;
 static uint16_t view_vram[32768];
@@ -117,9 +118,12 @@ static bool prepare(void *context, const SuperFx *source, uint8_t *ram) {
   if (source->ram_size != 65536 || player < 0x336 || player >= 0x11fa ||
       (player - 0x336) % 0x36 || g_ram[0x14db] == 3) return false;
   const unsigned shape = word(g_ram, player + 4);
+  pending.controls_preview = g_ram[0x1f0d] == 1 && word(ram, 0x34) == 64 &&
+                             word(ram, 0x36) == 48;
   /* These are player models, including all damage and cinematic variants.
    * An ambiguous match is rejected; other ships may share geometry. */
-  if (shape < 0xd2e8 || shape > 0xd400 || (shape - 0xd2cc) % 28) return false;
+  if (!(pending.controls_preview && shape == 0xbcb4) &&
+      (shape < 0xd2e8 || shape > 0xd400 || (shape - 0xd2cc) % 28)) return false;
   unsigned node = word(ram, 0x21e), found = 0, count = 0;
   uint8_t seen[65536 / 8] = {0};
   for (unsigned guard = 0; node && guard < 128; guard++) {
@@ -262,6 +266,8 @@ unsigned arwing64_picture_draw(uint8_t *pixels, size_t pitch, int width, int hei
       for (int x = 0; x < width; x++) {
         int gx = x - 16 - (int)extra, gy = y - 16;
         bool cover = y >= 168; /* current comms/meters, outside world matching */
+        if (pictures[selected].controls_preview)
+          cover |= x < 24 + (int)extra || x >= 136 + (int)extra || y < 24 || y >= 112;
         if (gx >= 0 && gx < 224 && gy >= 0 && gy < 152) {
           unsigned a = (gx / 8) * kTileColumnBytes + (gy / 8) * 32 + (gy & 7) * 2;
           unsigned bits = foreground[a] | foreground[a+1] |

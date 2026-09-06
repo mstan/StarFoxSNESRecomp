@@ -6,6 +6,9 @@ Authentic 4:3 and Enhanced widescreen. It is an opt-in development preview:
 automated gameplay-state checks pass and owner playtesting is pending.
 Do not treat this branch as release-approved.
 
+The controls screen's ship demonstration also uses the SF64 Arwing. Its
+controller diagram, labels and controls remain the SNES game's originals.
+
 ## Enable it
 
 In the launcher's Mods page, choose **Star Fox 64 Arwing**, select your own

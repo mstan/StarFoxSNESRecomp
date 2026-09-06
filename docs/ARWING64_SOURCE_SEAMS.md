@@ -49,6 +49,14 @@ MYSHIP_4 geometry (shift 0, +Z forward, +Y down): 16 vertices, bbox
 x -36..36, y -11..14, z -40..80; header half-extents 36/14/80, size 80.
 Used to fit the N64 model: N64 Arwing wingspan maps to 72 units.
 
+The controls demonstration instead uses the high-poly Arwing header `$00:BCB4`.
+Accept that player model only with the controls IRQ flag `$1F0D == 1` and
+GSU vanishing point `(64,48)`, as set by retail `Controls` in bank `$1F`.
+The final preview occupies screen `[24,136) x [24,112)` (plus widescreen
+centering); clip the replacement and its effects to that box. Both presentation
+modes were checked at frame 1200 against stock: full WRAM, GSU RAM, VRAM and
+GSU register/clock/history snapshots remained identical.
+
 The posed SF64 skeleton also points forward along +Z (`Display_Arwing` reticle
 offsets +1200/+2400; `Display_PlayerFeatures` engine glow offset -40..-70).
 The model-to-SNES axis conversion is `diag(-1,-1,1)`, followed by the transpose
