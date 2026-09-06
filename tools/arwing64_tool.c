@@ -276,8 +276,8 @@ int main(int argc, char **argv) {
   ov.list_broken_a = host_mesh_find_display_list(mesh, "aAwRightWingBrokenDL");
   ov.list_broken_b = host_mesh_find_display_list(mesh, "aAwLeftWingBrokenDL");
   int ok = 1;
-  /* Camera convention: the camera sits on +Z looking toward -Z. The nose is
-   * -Z in model space, so yaw 0 sees the tail (rear view) and yaw 180 sees
+  /* The preview camera looks along +Z. The posed model's nose is +Z,
+   * so yaw 0 sees the tail (rear view) and yaw 180 sees
    * the nose (front view; the viewer's left is the ship's starboard wing). */
   snprintf(path, sizeof(path), "%s/preview_rear.png", out_dir);
   ok &= render_preview(mesh, path, 0.0f, 0.0f, pose, ss, NULL);

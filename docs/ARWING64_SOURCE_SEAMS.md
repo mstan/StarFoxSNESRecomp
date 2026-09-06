@@ -33,8 +33,9 @@ input list starts at `$70:021E`; each node has next at +0, angles at +4..6,
 flags +7, shape +8, shadow coordinates +10..15, camera y/x/z +16/+18/+20.
 The private RAM copy replaces the unique matching player node's shape with
 `$D2CC`, including the both-wings-lost model. Ambiguous or malformed lists
-are declined. A second private pass starts after that node with a cleared
-picture, exporting foreground occluders. The shadow pass (`$01A0` bit 3)
+are declined. Player bolts can also be replaced in the private copy. A private
+pass starts after each replaced node with a cleared picture, exporting foreground
+occluders. The shadow pass (`$01A0` bit 3)
 and background prepasses (`$019E`, `$01BE`) are disabled only in that mask.
 
 Retail framebuffer data is 28 columns of 24 four-bit tiles (`0x5400` bytes).
@@ -47,6 +48,21 @@ VRAM view; CPU ports, DMA writes and saved guest memory use original VRAM.
 MYSHIP_4 geometry (shift 0, +Z forward, +Y down): 16 vertices, bbox
 x -36..36, y -11..14, z -40..80; header half-extents 36/14/80, size 80.
 Used to fit the N64 model: N64 Arwing wingspan maps to 72 units.
+
+The posed SF64 skeleton also points forward along +Z (`Display_Arwing` reticle
+offsets +1200/+2400; `Display_PlayerFeatures` engine glow offset -40..-70).
+The model-to-SNES axis conversion is `diag(-1,-1,1)`, followed by the transpose
+of the source object/view matrix. The earlier `diag(1,-1,-1)` faced backwards.
+
+Player projectile shapes are `$00:B369` (`elaser2`, single/twin) and `$00:B1FD`
+(`playerbeam`, upgraded). Require a live weapon (`object +9` bit 1), no explosion
+(`+8` bit 0 clear), and firing owner (`+19`, immediately after the three-byte
+strategy pointer at +16) equal to `$1238`. Match private draw nodes uniquely by
+shape, angles and exact Q15 camera position against the active object list at
+`$121D`. This excludes other owners sharing the same geometry. The SF64 source
+lists are `aLaserShotGreenDL` at `0x0101AED0` and `aLaserShotBlueDL` at
+`0x0101AD20`, using `PlayerShot_DrawLaser` semantics. All addresses here are
+retail or SF64 US rev1 addresses, not UltraStarFox build addresses.
 
 Shape header (28 bytes): `+0 sh_points(2) +2 sh_bank +3 sh_faces(2)
 +5 sh_sortz(2) +7 sh_shift +8 sh_radius(2) +A xmax +C ymax +E zmax +10 size

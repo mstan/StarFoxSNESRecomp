@@ -90,6 +90,14 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
                               const StarFoxEnhancedNativeShapePose *pose,
                               int transparent_black);
 
+/* Read-only retail object classification: 0 stock, 1 green laser, 2 blue
+ * upgraded beam. Owner pointer excludes wingmen and reflected/enemy shots. */
+int arwing64_player_shot_kind(const uint8_t *ram, unsigned object, unsigned shape);
+uint32_t arwing64_draw_shot(uint8_t *pixels, size_t pitch, int width, int height,
+                          const uint8_t *rom, size_t rom_size,
+                          const StarFoxEnhancedNativeShapePose *pose,
+                          int kind, int transparent_black);
+
 /* Per presentation frame bookkeeping (call once after the guest frame). */
 void arwing64_post_frame(void);
 

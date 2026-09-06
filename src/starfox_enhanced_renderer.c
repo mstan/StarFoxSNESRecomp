@@ -106,6 +106,7 @@ typedef struct NativeSourceObject {
   uint16_t shape;
   uint16_t colour_pointer;
   uint16_t fire_object;
+  uint8_t arwing_shot_kind;
   int16_t world_x;
   int16_t world_y;
   int16_t world_z;
@@ -858,6 +859,8 @@ static void latch_source_object(NativeSourceFrameSnapshot *snapshot,
   object.handle = (uint8_t)(slot + 1u);
   object.pointer = pointer;
   object.shape = ram_word(pointer + kObjShape);
+  object.arwing_shot_kind = arwing64_active()
+      ? (uint8_t)arwing64_player_shot_kind(g_ram, pointer, object.shape) : 0;
   object.flags = ram_byte(pointer + kObjFlags);
   object.type = ram_byte(pointer + kObjType);
   object.count = ram_byte(pointer + kObjCounter);
@@ -1344,6 +1347,15 @@ static unsigned draw_native_shape_object(uint8_t *pixels, size_t pitch,
   if (renderer_stats)
     renderer_stats->candidates++;
   fill_native_shape_pose(&pose, object, ws_extra, shadow);
+  if (!shadow && object->arwing_shot_kind && arwing64_active()) {
+    const uint32_t written = arwing64_draw_shot(pixels, pitch, width, height,
+        cart->rom, cart->romSize, &pose, object->arwing_shot_kind, 1);
+    if (renderer_stats) {
+      renderer_stats->filled_pixels += written;
+      if (written) renderer_stats->drawn++;
+    }
+    return written ? 1u : 0u;
+  }
   if (!shadow && object->handle == kPlayerHandle && arwing64_active()) {
     const uint32_t written = arwing64_draw_player(
         pixels, pitch, width, height, cart->rom, cart->romSize, &pose, 1);

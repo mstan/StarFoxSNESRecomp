@@ -21,9 +21,12 @@ def capture(args, enabled):
     text, count = re.subn(r'(?mi)^Arwing64\s*=.*$', 'Arwing64 = '+str(int(enabled)), text)
     if count != 1:
         raise RuntimeError('config must contain exactly one Arwing64 setting')
+    # A controller used by another running game must not steer this replay.
+    text += '\n[GamepadMap]\nEnableGamepad1 = false\nEnableGamepad2 = false\n'
     config.write_text(text)
     env = os.environ.copy()
     env['SDL_AUDIODRIVER'] = 'dummy'
+    env['SNESRECOMP_DEBUG_PORT'] = str(args.port)
     startup = None
     if os.name == 'nt':
         startup = subprocess.STARTUPINFO()
@@ -39,7 +42,7 @@ def capture(args, enabled):
         try:
             while process.poll() is None and time.monotonic() < deadline:
                 try:
-                    sock = socket.create_connection(('127.0.0.1', 4381), timeout=1)
+                    sock = socket.create_connection(('127.0.0.1', args.port), timeout=1)
                     break
                 except OSError:
                     time.sleep(.1)
@@ -102,6 +105,7 @@ def main():
     for name in ('exe', 'config', 'script', 'snes-rom', 'output'):
         parser.add_argument('--'+name, type=lambda p: Path(p).resolve(), required=True)
     parser.add_argument('--frames', type=int, nargs='+', default=[5000,5300,6200,6500,7600,8100,9200])
+    parser.add_argument('--port', type=int, default=4381)
     args = parser.parse_args()
     if args.frames != sorted(set(args.frames)) or min(args.frames) < 100:
         parser.error('frames must be unique, increasing and at least 100')

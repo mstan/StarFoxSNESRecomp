@@ -1,7 +1,7 @@
 # Star Fox 64 Arwing preview
 
 Arwing64 replaces the player presentation with the Star Fox 64 Arwing, wing
-damage variants, engine glow, roll shield, and ship sound effects. It works with
+damage variants, engine glow, roll shield, player lasers, and ship sound effects. It works with
 Authentic 4:3 and Enhanced widescreen. It is an opt-in development preview:
 automated gameplay-state checks pass and owner playtesting is pending.
 Do not treat this branch as release-approved.
@@ -91,12 +91,20 @@ For scripted launches the SNES ROM must be the final positional argument or
 the launcher can wait for ROM selection.
 
 The engine runs the original CPU and Super FX work unchanged. An optional
-private replay removes the original ship from a copy of the picture; another
-private pass supplies foreground coverage. The stock post-pass uses the camera
+private replay removes the original ship and identified player bolts from a
+copy of the picture; private passes supply foreground coverage. The stock post-pass uses the camera
 pose belonging to that exact picture and restores foreground objects and HUD
 over the SF64 mesh. Enhanced mode also uses its native world's draw order.
 No guest ROM, WRAM, GSU RAM or VRAM is patched. If the picture cannot be
 matched safely, that stock frame keeps its original ship.
+
+The SF64 skeleton's nose points along +Z. Its drawing transform preserves
+that direction; the earlier preview incorrectly turned it around. Green SF64
+lasers replace single/twin bolts, and blue SF64 lasers replace upgraded beams.
+Their trails fit the SNES projectile scale, with their tips anchored to the
+existing shot positions. Ownership checks exclude enemy and wingman shots;
+impact effects remain stock. The mesh cache uses a `_v2` suffix so an older
+ship-only cache cannot silently omit the laser assets.
 
 `tools/validate_arwing64.py` runs a supplied input script twice with the feature
 off/on. It pauses at exact frame checkpoints and compares full WRAM, GSU RAM,
@@ -108,6 +116,16 @@ python tools/validate_arwing64.py --exe build-arwing/StarFoxSNESRecomp.exe --con
 ```
 
 ## Validation status and limits
+
+The owner playtest found a reversed model and missing SF64 projectile visuals.
+The correction was checked in Authentic and Enhanced firing scenes. All 24
+title tests passed, including both laser lists against Torch and synthetic
+player/enemy/impact classification, camera matching and private-RAM retention.
+Four paused checkpoints (6200, 7600, 7900, 8100) matched full WRAM, GSU RAM,
+VRAM and GSU registers/clocks/history with the new shot passes off/on. Three
+additional firing checkpoints matched full WRAM between Authentic and Enhanced.
+The in-game upgraded blue beam still needs an owner playtest; its asset and
+classification paths have automated coverage.
 
 On 2026-09-05, the native audio differential and cue/lifecycle tests passed;
 the mesh census matched Torch. The former six-byte guest ROM hide patch

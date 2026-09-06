@@ -34,7 +34,9 @@ ARWING_LISTS = [
 DECOMP_ALIASES = {"aAwLaserGun2DL": "aAwLaserGun2L"}
 COMMON_LISTS = {"aOrbDL_red": "aOrbDL", "aOrbDL_blue": "aOrbDL",
                 "aOrbDL_green": "aOrbDL", "aOrbDL_orange": "aOrbDL",
-                "aBarrelRollDL": "aBarrelRollDL"}
+                "aBarrelRollDL": "aBarrelRollDL",
+                "aLaserShotGreenDL": "aLaserShotGreenDL",
+                "aLaserShotBlueDL": "aLaserShotBlueDL"}
 
 
 def read_text(path):

@@ -136,6 +136,22 @@ int arwing64_extract_mesh(const uint8_t *rom_image, size_t rom_size,
     }
   }
 
+  /* PlayerShot_DrawLaser's textured, unlit laser geometry. Colour and alpha
+   * come from the owner ROM's RGBA16 textures (SETUPDL_21). */
+  {
+    Sf64MaterialTemplate laser;
+    memset(&laser, 0, sizeof(laser));
+    laser.flags = HOST_MESH_MAT_ALPHA_BLEND | HOST_MESH_MAT_BILINEAR;
+    memset(laser.prim, 0xff, 4);
+    memset(laser.env, 0xff, 4);
+    ctx.material = laser;
+    if (sf64_gfx_import_display_list(&ctx, kSf64Addr_LaserGreenDL, "aLaserShotGreenDL") < 0 ||
+        sf64_gfx_import_display_list(&ctx, kSf64Addr_LaserBlueDL, "aLaserShotBlueDL") < 0) {
+      if (error) *error = "arwing64: laser import failed";
+      goto done;
+    }
+  }
+
   /* Skeleton. */
   Sf64Skeleton skel;
   if (!sf64_read_skeleton(&ctx, kSf64Addr_ArwingSkel, &skel, error)) goto done;

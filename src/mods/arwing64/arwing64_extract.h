@@ -40,6 +40,8 @@ enum {
   kSf64Addr_LaserGun2DL = 0x3011450u,
   kSf64Addr_OrbDL = 0x1024AC0u,
   kSf64Addr_BarrelRollDL = 0x101DC10u,
+  kSf64Addr_LaserGreenDL = 0x101AED0u,
+  kSf64Addr_LaserBlueDL = 0x101AD20u,
 };
 
 /* Limb indices in aAwArwingSkel[] with the roles the SF64 limb-draw override

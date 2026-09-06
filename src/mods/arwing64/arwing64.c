@@ -74,6 +74,7 @@ typedef struct Runtime {
   int list_broken_a, list_broken_b, list_wing_a, list_wing_b;
   int list_orb[4], list_shield;
   int pose_half_open, pose_closed, pose_open;
+  int list_laser[2];
   Arwing64GuestState guest;
   uint8_t prev_pitch, prev_yaw, prev_roll;
   int prev_valid;
@@ -167,8 +168,8 @@ static int cache_paths(const char *rom_sha1, char *blob_path, size_t n,
   char dir[512];
   if (!snesrecomp_exe_dir_path("arwing64_cache", dir, sizeof(dir))) return 0;
   arwing64_mkdir(dir);
-  snprintf(blob_path, n, "%s/arwing64_%.12s.bin", dir, rom_sha1);
-  snprintf(sidecar_path, m, "%s/arwing64_%.12s.bin.sha256", dir, rom_sha1);
+  snprintf(blob_path, n, "%s/arwing64_%.12s_v2.bin", dir, rom_sha1);
+  snprintf(sidecar_path, m, "%s/arwing64_%.12s_v2.bin.sha256", dir, rom_sha1);
   return 1;
 }
 
@@ -183,6 +184,12 @@ static HostMesh *load_blob_verified(const uint8_t *blob, size_t size,
   HostMesh *mesh = host_mesh_load(blob, size, &err);
   if (!mesh) {
     set_status(kArwing64_CacheInvalid, err);
+    return NULL;
+  }
+  if (host_mesh_find_display_list(mesh, "aLaserShotGreenDL") < 0 ||
+      host_mesh_find_display_list(mesh, "aLaserShotBlueDL") < 0) {
+    host_mesh_free(mesh);
+    set_status(kArwing64_CacheInvalid, "mesh cache is missing laser assets");
     return NULL;
   }
   snprintf(g_rt.stats.blob_sha256, sizeof(g_rt.stats.blob_sha256), "%s", hex);
@@ -200,6 +207,8 @@ static void resolve_lists(void) {
   g_rt.list_orb[2] = host_mesh_find_display_list(m, "aOrbDL_green");
   g_rt.list_orb[3] = host_mesh_find_display_list(m, "aOrbDL_orange");
   g_rt.list_shield = host_mesh_find_display_list(m, "aBarrelRollDL");
+  g_rt.list_laser[0] = host_mesh_find_display_list(m, "aLaserShotGreenDL");
+  g_rt.list_laser[1] = host_mesh_find_display_list(m, "aLaserShotBlueDL");
   g_rt.pose_half_open = host_mesh_find_pose(m, "wings_half_open");
   g_rt.pose_closed = host_mesh_find_pose(m, "wings_closed");
   g_rt.pose_open = host_mesh_find_pose(m, "wings_open");
@@ -516,13 +525,63 @@ static int ship_limb_override(void *ctx, int limb, int *dl, HostMeshVec3 *t,
 }
 
 /* Build R = M^T * A where M is the Enhanced Q15 object*view matrix (points
- * transform as cam = M^T p) and A maps N64 model axes (x right, y up, nose
- * -z) onto Star Fox object axes (x right, y down, nose +z): A = diag(1,-1,-1). */
+ * transform as cam = M^T p). The posed SF64 skeleton points its nose along
+ * +Z: Display_Arwing places the reticle at +Z and Display_PlayerFeatures
+ * places the engine glow at -Z. Convert to the SNES object's handedness with
+ * A = diag(-1,-1,1). Negating Z instead of X turned the ship backwards. */
 static void ship_rotation(const int16_t m_q15[9], float out[9]) {
-  const float a[3] = {1.0f, -1.0f, -1.0f};
+  const float a[3] = {-1.0f, -1.0f, 1.0f};
   for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
       out[i * 3 + j] = ((float)m_q15[j * 3 + i] / 32768.0f) * a[j];
+}
+
+static int skip_ship_limb(void *ctx, int limb, int *dl, HostMeshVec3 *t,
+                          HostMeshVec3 *r) {
+  (void)ctx; (void)limb; (void)dl; (void)t; (void)r;
+  return 0;
+}
+
+uint32_t arwing64_draw_shot(uint8_t *pixels, size_t pitch, int width, int height,
+                          const uint8_t *rom, size_t rom_size,
+                          const StarFoxEnhancedNativeShapePose *pose,
+                          int kind, int transparent_black) {
+  if (!arwing64_active() || !pixels || !pose || kind < 1 || kind > 2 ||
+      g_rt.list_laser[kind - 1] < 0) return 0;
+  int16_t matrix[9];
+  if (!StarFoxEnhancedComputeShapeMatrix(rom, rom_size, pose, matrix)) return 0;
+  float rotation[9];
+  ship_rotation(matrix, rotation);
+  /* Fit the SF64 geometry to the retail bolt's 320-unit trail. The guest
+   * position remains the leading tip; no new shots or trajectories exist. */
+  const float axis_scale[3] = {3.0f, 3.0f, 320.0f / 82.0f};
+  HostMeshExtraList list;
+  memset(&list, 0, sizeof(list));
+  list.display_list = g_rt.list_laser[kind - 1];
+  list.alpha_scale = 1.0f;
+  const float position[3] = {(float)pose->x, (float)pose->y, (float)pose->z};
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++)
+      list.model_to_camera[i * 4 + j] = rotation[i * 3 + j] * axis_scale[j];
+    list.model_to_camera[i * 4 + 3] = position[i] - rotation[i * 3 + 2] * 55.0f * axis_scale[2];
+  }
+  Projection projection = {(float)pose->vanish_x + pose->widescreen_extra,
+                           (float)pose->vanish_y};
+  HostMeshDrawParams draw;
+  host_mesh_draw_params_init(&draw);
+  draw.mesh = g_rt.mesh;
+  draw.override.fn = skip_ship_limb;
+  draw.extra_lists = &list;
+  draw.extra_list_count = 1;
+  draw.projection.project = project_starfox;
+  draw.projection.ctx = &projection;
+  draw.projection.near_z = kNearZ;
+  draw.target = pixels; draw.target_pitch = pitch;
+  draw.target_width = width; draw.target_height = height;
+  draw.supersample = g_config.arwing64_supersample;
+  draw.flip_winding = 1;
+  draw.transparent_black_target = transparent_black;
+  return host_mesh_draw(&draw);
 }
 
 uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
@@ -595,8 +654,9 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
    * them correctly. */
   HostMeshExtraList extras[2];
   int extra_count = 0;
-  /* Engine glow: a camera-facing quad just behind the tail (Star Fox object
-   * -Z), red on planets and blue in space, sized by boost intensity and
+  /* Engine glow: a camera-facing quad just behind the tail (SF64 model -Z,
+   * transformed by the same rotation as the hull), red on planets and blue
+   * in space, sized by boost intensity and
    * flickering between two scales like the N64 game. */
   {
     const float tail = (71.0f + 10.0f) * kModelScale;
