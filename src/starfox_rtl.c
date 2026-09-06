@@ -13,6 +13,7 @@
 #include "snes/snes.h"
 #include "snes/superfx.h"
 #include "starfox_enhanced_renderer.h"
+#include "starfox_presentation.h"
 #include "mods/arwing64/arwing64.h"
 #include "mods/arwing64/arwing64_picture.h"
 
@@ -584,7 +585,7 @@ void StarFoxDrawPpuFrame(void) {
   PpuSetWsHudOamShiftRange(g_ppu, 0, 0);
   PpuSetWsHudOamShiftRange2(g_ppu, 0, 0);
   PpuSetWidescreenLayerAnchorBand(g_ppu, 0, 0, 0, 0, 0);
-  PpuSetMode2LayerCapture(g_ppu, -1);
+  PpuSetMode2LayerCapture(g_ppu, g_config.enhanced_renderer ? 0 : -1);
   PpuSetWidescreenLineEnhancer(g_ppu, NULL, NULL);
   dma_startDma(g_dma, g_snesrecomp_last_hdmaen, true);
   for (int ch = 0; ch < 8; ch++)
@@ -593,6 +594,8 @@ void StarFoxDrawPpuFrame(void) {
   for (int line = 0; line <= 224; line++) {
     for (int ch = 0; ch < 8; ch++)
       SimpleHdma_DoLine(&hdma[ch]);
+    if (g_config.enhanced_renderer || arwing64_active())
+      StarFoxPresentationCaptureLine(line);
     ppu_runLine(g_ppu, line);
   }
 

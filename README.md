@@ -34,10 +34,11 @@ widened presentation, with fixed 16:10, 16:9, 21:9, and 32:9 presets. Authentic
 4:3 output remains available when the Enhanced Widescreen mod is disabled and
 does not use the Enhanced renderer.
 
-Known remaining Enhanced-mode cleanup includes intermittent bottom-edge black
-bars, transition artifacting, and incomplete particle/effect parity. Longer
-play sessions, additional routes, save-state behavior, and non-Windows builds
-still need more coverage. Please report reproducible visual, audio, timing, or
+The adaptive presenter keeps gameplay and the hangar wide while centering
+menus, controls and briefings. Current-frame fades and retail HUD state address
+the observed boot-to-Corneria transition artifacts and bottom-edge stripes.
+Longer play sessions, additional routes, complete particle/effect parity,
+save-state behavior, and non-Windows builds still need more coverage. Please report reproducible visual, audio, timing, or
 stability problems through [GitHub Issues](../../issues).
 
 ![StarFoxSNESRecomp Enhanced widescreen training mode](docs/images/starfox-enhanced-widescreen-training.png)
@@ -46,7 +47,8 @@ stability problems through [GitHub Issues](../../issues).
 
 The source build also offers an opt-in **Star Fox 64 Arwing** with wing damage,
 glow, roll shield, green/blue lasers and ship audio, extracted locally from your
-own SF64 US v1.1 ROM. It also replaces the controls-screen ship preview.
+own SF64 US v1.1 ROM. The wings start fully expanded, and the controls-screen
+ship preview also uses the SF64 model.
 Automated gameplay-state comparisons pass, and the owner approved the visual
 playtest on September 5, 2026. See [Arwing64 setup and validation](docs/ARWING64.md). Asset/audio semantics
 are informed by sonicdcer/sf64 (CC0), with Torch (MIT) as a development oracle,
@@ -54,8 +56,11 @@ on the Star Fox Enhanced presentation foundation credited above.
 
 ![Star Fox 64 Arwing in Star Fox SNES, with Enhanced 21:9 presentation](docs/images/starfox-arwing64-widescreen.png)
 
-Actual gameplay capture; the ROMs and extracted models, textures and audio are
-not included. Enhanced renderer transition cleanup remains in progress.
+![Star Fox 64 Arwing with expanded wings in the SNES controls preview](docs/images/starfox-arwing64-controls.png)
+
+Actual gameplay and owner-provided controls-preview captures; the ROMs and extracted models, textures and audio are
+not included. See [adaptive widescreen behavior](docs/TRUE_WIDESCREEN.md) for
+the presentation rules and current validation limits.
 
 1. Download `StarFoxSNESRecomp-windows-0.0.1.zip` from
    [Releases](../../releases) and extract it into a fresh folder.
@@ -262,6 +267,6 @@ redistribution.
 ---
 
 <p align="center">
-  <sub><b>R.A.I.D. — Retro AI Development</b> · a Discord for AI-assisted retro reverse-engineering, decomp &amp; recomp</sub><br>
+  <sub><b>R.A.I.D. â€” Retro AI Development</b> Â· a Discord for AI-assisted retro reverse-engineering, decomp &amp; recomp</sub><br>
   <a href="https://discord.gg/Ad9BwSzctP">Join the R.A.I.D. community</a>
 </p>

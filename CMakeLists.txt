@@ -55,6 +55,7 @@ add_executable(StarFoxSNESRecomp
   src/main.c
   src/opengl.c
   src/starfox_enhanced_renderer.c
+  src/starfox_presentation.c
   src/starfox_mods.c
   src/starfox_cpu_infra.c
   src/starfox_rtl.c

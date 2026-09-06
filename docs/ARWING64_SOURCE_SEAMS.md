@@ -161,3 +161,16 @@ address corrections were applied on the Arwing64 branch on 2026-09-05. The
 | `kGsuBoostAnim` | `0x018e` | `$70:01BC` |
 | `kGsuShieldUp` | `0x0190` | no GSU equivalent; WRAM `$16CD` |
 | `kGsuHudColour` / `kGsuHudDamageFlags` | `0x3512` / `0x3514` | `$70:2B24` / `$70:2B26` |
+| `kGsuMeters` | `0x0200` | `$70:021C` |
+| `kGsuShadowHeight` | `0x0204` | `$70:0220` |
+| `kRamShadowHeight` | `0x19dc` | `$1957` |
+| `kRamWhichFriend` / `kRamFriendsMsg` | `0x191f` / `0x1920` | `$189A` / `$189B` |
+| `kRamMsgCount1` / `kRamMsgCount2` | `0x1922` / `0x1923` | `$189D` / `$189E` |
+
+The retail `RenderObjects` routine tests the meter-enable word at `$70:021C`;
+the draw-list pointer follows at `$70:021E`, then shadow height at `$70:0220`.
+Retail `$03:EA00` code stores the comms friend/message/count fields listed above.
+`$70:0018` is shared by portrait copying and 3D shape decoding, so the native
+compositor takes animated comms pixels from the published BG1 plane instead
+of interpreting that scratch pointer after the frame. BG2 scrolling now uses
+actual per-scanline PPU/HDMA values, avoiding modified-build WRAM table addresses.

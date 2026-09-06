@@ -18,9 +18,19 @@ def capture(args, enabled):
     label = 'on' if enabled else 'off'
     config = args.output / (label + '.ini')
     text = args.config.read_text()
-    text, count = re.subn(r'(?mi)^Arwing64\s*=.*$', 'Arwing64 = '+str(int(enabled)), text)
+    feature = getattr(args, 'feature', 'Arwing64')
+    text, count = re.subn(r'(?mi)^'+feature+r'\s*=.*$',
+                          feature+' = '+str(int(enabled)), text)
     if count != 1:
-        raise RuntimeError('config must contain exactly one Arwing64 setting')
+        raise RuntimeError('config must contain exactly one '+feature+' setting')
+    if feature == 'EnhancedRenderer':
+        # The launcher/config parser derives this feature from Widescreen.
+        # Changing only the legacy boolean would compare Enhanced with itself.
+        match = re.findall(r'(?mi)^Widescreen\s*=\s*(.+)$', text)
+        if len(match) != 1 or match[0].strip().lower() in ('off', '0', '4:3'):
+            raise RuntimeError('Enhanced comparison requires one wide Widescreen preset')
+        if not enabled:
+            text = re.sub(r'(?mi)^Widescreen\s*=.*$', 'Widescreen = Off', text)
     # A controller used by another running game must not steer this replay.
     text += '\n[GamepadMap]\nEnableGamepad1 = false\nEnableGamepad2 = false\n'
     config.write_text(text)
@@ -106,6 +116,8 @@ def main():
         parser.add_argument('--'+name, type=lambda p: Path(p).resolve(), required=True)
     parser.add_argument('--frames', type=int, nargs='+', default=[5000,5300,6200,6500,7600,8100,9200])
     parser.add_argument('--port', type=int, default=4381)
+    parser.add_argument('--feature', choices=['Arwing64', 'EnhancedRenderer'],
+                        default='Arwing64', help='presentation feature to compare off/on')
     args = parser.parse_args()
     if args.frames != sorted(set(args.frames)) or min(args.frames) < 100:
         parser.error('frames must be unique, increasing and at least 100')

@@ -28,51 +28,38 @@ Star Fox output belongs exclusively to the opt-in native renderer path behind
 
 ## Current Native Path
 
-`StarFoxEnhancedRenderFrame` handles the frame before the default presenter runs.
-It clears the full target, lets `StarFoxDrawPpuFrame` advance the game's normal
-PPU/HDMA render state, renders BG1/BG2/BG3 and OAM through Star Fox Enhanced's
-`BackgroundRenderer` and `SpriteRenderer` into an indexed framebuffer from raw
-PPU VRAM/CGRAM/OAM/register state, and converts that framebuffer to the host
-BGRA target.
-Mode 2 offset-per-tile state is enabled from the live PPU mode rather than the
-transient retail `DOVOFS` calculation request. By post-frame, `DOVOFS` can be
-clear even though BG3 VRAM still contains the active validity-tagged offsets;
-following the PPU mode preserves Corneria's mountains and perspective ground.
-When the native world replacement is active in gameplay/training frames, the
-Enhanced PPU compositor also extends the surviving BG/OAM layers across the
-host scene width instead of clipping them back to the centered cartridge
-viewport. The old stock PPU output remains unextended; this only affects the
-opt-in Enhanced presentation path.
-Live Mode 2 scene frames are allowed to keep that extended native PPU output
-even when the native-world replacement gate is not suppressing BG1; the
-side-margin corruption guard remains for unclassified native PPU frames, not
-for known-good Mode 2 terrain/background presentation.
+`StarFoxEnhancedRenderFrame` runs the normal stock scanout once, then chooses
+the presentation from that frame's visible PPU state. Gameplay and the hangar
+use the wider native world. Title, controls, map and briefing screens keep the
+original picture centered at its original proportions. Fully blank transition
+frames remain blank. The chosen display preset still sets the output width.
 
-Enhanced native scene replacement renders native shapes and the provisional
-shadow pass into a transparent scratch BGRA buffer before composing PPU layers.
-Mode 2 gameplay frames can still composite that native object layer when the
-replacement gate is not suppressing BG1; this matches the reference presenter,
-where the native Super FX layer is distinct from the SNES BG/OAM compositor.
-The compositor suppresses the stock Mode 3 BG1 SuperFX world plane only when the
-current source snapshot looks like a gameplay/training world frame and that
-scratch render produced enough visible native pixels to replace the cartridge
-framebuffer.
-The gate is intentionally output-based: at least eight active source objects,
-two successfully drawn native shapes, 4096 visible native pixels, and no source
-text objects. It does not require a minimum source draw-list count because
-runtime logs showed valid high-coverage native scenes failing solely on that
-pre-render count.
-Once a strong frame enters native replacement, scene-scoped hysteresis keeps
-the native compositor active while at least six source objects remain and no
-source text objects appear, but it now also requires at least two native shapes
-and 2048 visible native pixels. This prevents ordinary low-coverage camera
-moments from alternating between the wide native scene and centered stock
-output without hiding the stock Super FX world behind a sparse underdrawn
-native frame; UI or scene transitions still reset the replacement state.
-Otherwise BG1 and the centered stock fallback remain available. This keeps the
-rule conservative for title, map, briefing, and UI frames until their source
-state is separately proven, and it must not re-enable Star Fox PPU/SuperFX
-widening hooks.
+`starfox_presentation.c` captures registers and palette during the visible
+picture, plus each scanline's brightness and BG2 horizontal scroll after HDMA.
+It never writes guest state. End-of-frame forced blank is not the brightness
+of the picture that was just displayed. Native layers and the SF64 mesh follow
+the current fade once, after composition; stock menu pixels keep their original
+fade. The original top/bottom world border is extended without importing its
+HDMA blanking stripe into the expanded scene.
+
+The retail world gate recognizes the double-buffered Super FX BG1 layout in
+Mode 1 or 2, BG1/BG2/OBJ enabled, a current source snapshot and a consistent
+visible world region. The controls IRQ flag excludes the ship demonstration.
+Mode 3 map/briefing and title layer layouts keep the stock center. Object counts
+and pixel coverage do not decide ownership: sparse gameplay should stay wide.
+Allocation, shape decode or native PPU failures fall back to the stock center.
+
+The native shape pass uses a transparent scratch buffer. The PPU compositor
+omits the original Super FX world plane before composing that native pass.
+Mode 2 offset-per-tile validity comes from the uploaded BG3 entries. Horizontal
+scroll comes from actual scanline PPU values, rather than addresses from the
+different Enhanced ROM build. No stock PPU or Super FX widening hook is enabled.
+
+HUD meters follow the retail enable flag at `$70:021c`. Radio portraits and
+text come from the published indexed BG1 HUD plane, preserving mouth movement,
+static, and opening/closing animation. `$70:0018` is shared shape-decoder scratch
+space, so its post-frame contents cannot identify a portrait. The optional PPU
+layer capture runs only with Enhanced enabled and does not change VRAM.
 
 The earlier local C Super FX shape overlay is not part of normal Enhanced
 output and is no longer built into the Star Fox target. A direct bridge to the
@@ -99,18 +86,19 @@ retail active list for visible geometry; it does not reconstruct objects from
 the free list, and retail has no verified `XALBLKS` mirror. Super FX draw-list
 RAM is intentionally not used as visible geometry because it can be stale or
 zeroed outside the source task. The shadow renderer follows Enhanced's two-pass
-order and shadow-shape/flattened-matrix rules. `PLAYERFLYMODE=$1565` and
-`SHADOWHEIGHT=$19dc` are latched from durable WRAM first, with the transient
+order and shadow-shape/flattened-matrix rules. `PLAYERFLYMODE=$14da` and
+`SHADOWHEIGHT=$1957` are latched from durable WRAM first, with the transient
 Super FX mirrors kept only as fallback for task-local diagnostics. Retail
 scaled-sprite objects now stay in the source draw order and use Enhanced's
 simple scaled-sprite raster path,
 including the source header size adjustment and per-object colour. The native
 world pass also calls
-Enhanced's `draw_cockpit_hud` when retail `HUDROT=$154e` is enabled, using the
-source `M_HUDCOLOUR=$3512` and `M_HUDFLAGS=$3514` state and the same centered
+Enhanced's `draw_cockpit_hud` when retail `HUDROT=$14c3` is enabled, using the
+source `M_HUDCOLOUR=$2b24` and `M_HUDFLAGS=$2b26` state and the same centered
 224-pixel cockpit viewport as the PC port. The WRAM bridge is the current
-Enhanced-mode renderer feed; remaining cleanup is focused on transition
-artifacting, intermittent bottom-edge black bars, and particle/effect parity.
+Enhanced-mode renderer feed; transition/fade and bottom-border fixes have been checked on the boot-to-
+Corneria route. Additional routes and complete particle/effect parity still
+need coverage.
 
 Retail and the Enhanced oracle do not share every shape header address. For
 example, the live retail player object can report shape `$d320`, while the
@@ -134,10 +122,9 @@ proves the object feed can produce actual wider geometry; the remaining black
 and incomplete areas are missing renderer classes/composition, not widened PPU
 output.
 
-The old stock-RGB center copy remains only as a hard failure fallback if native
-PPU-layer rendering cannot run or the native BG/OAM compositor detects an
-unsupported wide frame with high-coverage, high-colour side-margin garbage. In
-the normal Enhanced path the stock renderer is not the final image owner.
+The stock center is the intended presenter for menus and unsupported scenes,
+and the fallback for a failed native world render. There is no colour-count
+heuristic or stale gameplay-HUD hold across scene changes.
 
 ## PC Port Crosswalk
 
@@ -155,6 +142,21 @@ renderers compose a wider framebuffer from game-specific assets/state.
 | timing interpolation in `tests/timing_tests.cpp` and simulation snapshots | presentation history, fixed duplicate-present scheduling, and native pose interpolation | Implemented for native shape poses; particle/effect parity still pending |
 
 ## Validation Rule
+
+The September 5 follow-up passed 26 game tests, including synthetic scanout
+cases for fades, blanking, sparse worlds, controls and stale source frames.
+Local 21:9 captures cover the boot route through gameplay frame 8500; a 16:9
+sequence samples every five frames from 4380 through 5700 across briefing,
+hangar and mission entry. Inspected transitions show no stale picture or HUD
+garble. Eight paused checkpoints through frame 8100 match Authentic versus
+Enhanced for full WRAM, GSU RAM, original VRAM, and exposed GSU state. Arwing64
+off/on independently matches the same eight checkpoints.
+
+Reproduce the presentation comparison with `tools/validate_arwing64.py
+--feature EnhancedRenderer` and a config containing a wide `Widescreen` preset.
+The tool changes `Widescreen` to `Off` for the Authentic pass: the legacy
+`EnhancedRenderer` boolean alone does not control the current launcher config.
+These are bounded route checks, not a full-game visual certification.
 
 Any 16:9/21:9/32:9 capture with non-black garbage in the side columns is a
 native renderer bug. It should be fixed in the native compositor or its Star

@@ -9,6 +9,8 @@ and release testing is still needed.
 The controls screen's ship demonstration also uses the SF64 Arwing. Its
 controller diagram, labels and controls remain the SNES game's originals.
 
+![SF64 Arwing in the controls preview, captured by the owner](images/starfox-arwing64-controls.png)
+
 The wings start in SF64's fully opened flight pose. SNES has no matching SF64
 wing-opening event, so this uses the original open pose directly, including in
 the controls preview. Wing damage still replaces the appropriate wing. Mesh

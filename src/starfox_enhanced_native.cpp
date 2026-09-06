@@ -2,6 +2,8 @@
 
 extern "C" {
 #include "common_rtl.h"
+#include "starfox_enhanced_renderer.h"
+#include "starfox_presentation.h"
 #include "snes/ppu.h"
 }
 
@@ -31,10 +33,6 @@ extern "C" {
 namespace {
 
 enum {
-  kRamBg2XScroll = 0x1723,
-  kRamHdmbg2Hofs2 = 0x1934,
-  kRamBg2Scroll = 0x19ca,
-  kRamDoHofs = 0x19d0,
   kRomDepthTables = 0x038f9a,
 };
 
@@ -133,19 +131,6 @@ static const starfox::assets::Shape *cached_shape(NativeShapeAssets &assets,
   return &shape->second;
 }
 
-static std::uint16_t ram_word(std::uint32_t address) {
-  return static_cast<std::uint16_t>(g_ram[address]) |
-         static_cast<std::uint16_t>(g_ram[(address + 1u) & 0x1ffffu] << 8);
-}
-
-static std::uint16_t ram_word16(std::uint16_t address) {
-  return static_cast<std::uint16_t>(g_ram[address]) |
-         static_cast<std::uint16_t>(
-             static_cast<std::uint16_t>(
-                 g_ram[static_cast<std::uint16_t>(address + 1u)])
-             << 8u);
-}
-
 static void copy_vram_bytes(starfox::simulation::SnesPpuState &out,
                             const Ppu *ppu) {
   for (std::size_t i = 0; i < 0x8000u; i++) {
@@ -167,15 +152,10 @@ static void copy_oam_bytes(starfox::simulation::SnesPpuState &out,
 
 static void
 copy_mode2_horizontal_offsets(starfox::simulation::SnesPpuState &out) {
-  if (!g_ram[kRamDoHofs])
-    return;
+  // Observe the actual HDMA result instead of guessing a WRAM table address.
   out.bg2_horizontal_offsets_enabled = true;
-  const std::uint16_t source = ram_word(kRamHdmbg2Hofs2);
-  for (std::size_t line = 0; line < out.bg2_horizontal_offsets.size(); line++) {
-    const std::uint16_t record = static_cast<std::uint16_t>(source + line * 3u);
-    out.bg2_horizontal_offsets[line] = static_cast<std::int16_t>(
-        ram_word16(static_cast<std::uint16_t>(record + 1u)));
-  }
+  for (std::size_t line = 0; line < out.bg2_horizontal_offsets.size(); line++)
+    out.bg2_horizontal_offsets[line] = StarFoxPresentationBg2ScrollX((int)line);
 }
 
 static starfox::simulation::SnesPpuState make_ppu_state(const Ppu *ppu) {
@@ -212,14 +192,10 @@ static starfox::simulation::SnesPpuState make_ppu_state(const Ppu *ppu) {
   return out;
 }
 
-static std::uint8_t brightness(const Ppu *ppu) {
-  static std::uint8_t last_visible_brightness = 15;
-  const std::uint8_t level = static_cast<std::uint8_t>(ppu->inidisp & 0x0fu);
-  if ((ppu->inidisp & 0x80u) == 0) {
-    last_visible_brightness = level;
-    return level;
-  }
-  return last_visible_brightness;
+static std::uint8_t brightness(const Ppu *) {
+  // Apply the current frame's scanline brightness once after all native layers,
+  // including host meshes, have been composed.
+  return 15;
 }
 
 static std::uint8_t expand5(std::uint16_t value) {
@@ -373,8 +349,8 @@ static void maybe_log_native_ppu(const Ppu *ppu,
                static_cast<unsigned>(ppu->inidisp),
                static_cast<unsigned>(state.object_select),
                static_cast<unsigned>(widescreen_extra), visible_pixels,
-               static_cast<int>(ram_word(kRamBg2XScroll)),
-               static_cast<int>(ram_word(kRamBg2Scroll)),
+               static_cast<int>(StarFoxPresentationPpu()->hScroll[1]),
+               static_cast<int>(StarFoxPresentationPpu()->vScroll[1]),
                state.bg2_vertical_offsets_enabled ? 1u : 0u,
                state.bg2_horizontal_offsets_enabled ? 1u : 0u);
 }
@@ -394,8 +370,8 @@ static void draw_mode_layers(const starfox::simulation::SnesPpuState &ppu,
   const bool extend_scene =
       widescreen_extra != 0 &&
       (ppu.background_mode == 2u || suppress_superfx_world_bg1);
-  const auto bg2_scroll_x = static_cast<std::int16_t>(ram_word(kRamBg2XScroll));
-  const auto bg2_scroll_y = static_cast<std::int16_t>(ram_word(kRamBg2Scroll));
+  const auto bg2_scroll_x = static_cast<std::int16_t>(StarFoxPresentationPpu()->hScroll[1]);
+  const auto bg2_scroll_y = static_cast<std::int16_t>(StarFoxPresentationPpu()->vScroll[1]);
 
   if (ppu.background_mode == 1u) {
     background_renderer.draw_bg3(ppu, framebuffer, low, viewport_origin, false);
@@ -494,11 +470,11 @@ extern "C" int StarFoxEnhancedDrawNativePpuLayers(uint8_t *pixels, size_t pitch,
                                                   uint16_t widescreen_extra,
                                                   int suppress_superfx_world_bg1,
                                                   int anchor_edge_hud) {
-  if (!g_ppu || !pixels || pitch < static_cast<size_t>(width) * 4u ||
+  if (!StarFoxPresentationPpu() || !pixels || pitch < static_cast<size_t>(width) * 4u ||
       width <= 0 || height <= 0)
     return 0;
 
-  const auto ppu_state = make_ppu_state(g_ppu);
+  const auto ppu_state = make_ppu_state(StarFoxPresentationPpu());
   const auto target_height =
       suppress_superfx_world_bg1 != 0 || anchor_edge_hud != 0
           ? static_cast<std::uint32_t>(height)
@@ -509,21 +485,21 @@ extern "C" int StarFoxEnhancedDrawNativePpuLayers(uint8_t *pixels, size_t pitch,
   draw_mode_layers(ppu_state, framebuffer, widescreen_extra,
                    suppress_superfx_world_bg1 != 0, anchor_edge_hud != 0);
   const auto visible_pixels = count_visible_pixels(framebuffer);
-  maybe_log_native_ppu(g_ppu, ppu_state, widescreen_extra, visible_pixels);
+  maybe_log_native_ppu(StarFoxPresentationPpu(), ppu_state, widescreen_extra, visible_pixels);
   if (visible_pixels == 0)
     return 0;
-  write_bgra(framebuffer, ppu_state, g_ppu, pixels, pitch);
+  write_bgra(framebuffer, ppu_state, StarFoxPresentationPpu(), pixels, pitch);
   return 1;
 }
 
 extern "C" unsigned StarFoxEnhancedDrawGameplayHudSprites(
     uint8_t *pixels, size_t pitch, int width, int height,
     uint16_t widescreen_extra) {
-  if (!g_ppu || !pixels || pitch < static_cast<size_t>(width) * 4u ||
+  if (!StarFoxPresentationPpu() || !pixels || pitch < static_cast<size_t>(width) * 4u ||
       width <= 0 || height <= 0 || widescreen_extra == 0)
     return 0;
 
-  const auto ppu_state = gameplay_hud_oam_only(make_ppu_state(g_ppu));
+  const auto ppu_state = gameplay_hud_oam_only(make_ppu_state(StarFoxPresentationPpu()));
   starfox::render::Framebuffer framebuffer(static_cast<std::uint32_t>(width),
                                            static_cast<std::uint32_t>(height));
   const starfox::render::SpriteRenderer sprite_renderer;
@@ -534,18 +510,18 @@ extern "C" unsigned StarFoxEnhancedDrawGameplayHudSprites(
                                  viewport_origin, true, true);
   }
   return static_cast<unsigned>(
-      overlay_bgra_nonzero(framebuffer, ppu_state, g_ppu, pixels, pitch));
+      overlay_bgra_nonzero(framebuffer, ppu_state, StarFoxPresentationPpu(), pixels, pitch));
 }
 
 extern "C" unsigned StarFoxEnhancedDrawGameplayHudMeters(
     uint8_t *pixels, size_t pitch, int width, int height,
     uint16_t widescreen_extra, uint8_t damage, uint8_t boost, int shield_up,
     int enabled, uint8_t boss_health, uint8_t boss_max_health) {
-  if (!g_ppu || !pixels || pitch < static_cast<size_t>(width) * 4u ||
+  if (!StarFoxPresentationPpu() || !pixels || pitch < static_cast<size_t>(width) * 4u ||
       width <= 0 || height <= 0 || widescreen_extra == 0 || !enabled)
     return 0;
 
-  const auto ppu_state = make_ppu_state(g_ppu);
+  const auto ppu_state = make_ppu_state(StarFoxPresentationPpu());
   starfox::render::Framebuffer framebuffer(static_cast<std::uint32_t>(width),
                                            static_cast<std::uint32_t>(height));
   const starfox::render::SpriteRenderer sprite_renderer;
@@ -559,7 +535,7 @@ extern "C" unsigned StarFoxEnhancedDrawGameplayHudMeters(
   framebuffer.clear(0);
   sprite_renderer.draw_meters(meters, framebuffer, true);
   return static_cast<unsigned>(
-      overlay_bgra_nonzero_at(framebuffer, ppu_state, g_ppu, pixels, pitch, 0,
+      overlay_bgra_nonzero_at(framebuffer, ppu_state, StarFoxPresentationPpu(), pixels, pitch, 0,
                               16, width, height));
 }
 
@@ -586,7 +562,7 @@ extern "C" unsigned StarFoxEnhancedDrawCockpitHud(
                               normal_colour_override);
 
     unsigned visible = 0;
-    const auto palette_level = brightness(g_ppu);
+    const auto palette_level = brightness(StarFoxPresentationPpu());
     for (std::uint32_t y = 0; y < hud.height(); y++) {
       const int target_y = vertical_origin + static_cast<int>(y);
       if (target_y < 0 || target_y >= height)
@@ -596,7 +572,7 @@ extern "C" unsigned StarFoxEnhancedDrawCockpitHud(
         const auto palette_index = hud.get(x, y);
         if (palette_index == 0u)
           continue;
-        const auto cgram = g_ppu ? g_ppu->cgram[palette_index]
+        const auto cgram = StarFoxPresentationPpu() ? StarFoxPresentationPpu()->cgram[palette_index]
                                  : static_cast<std::uint16_t>(0);
         auto *dst = row + static_cast<std::size_t>(x) * 4u;
         dst[2] = static_cast<std::uint8_t>(
@@ -629,7 +605,7 @@ extern "C" unsigned StarFoxEnhancedDrawProjectedText(
     auto &assets = shape_assets_for_rom(rom, rom_size);
     if (!assets.text_renderer)
       return 0;
-    const auto ppu_state = g_ppu ? make_ppu_state(g_ppu)
+    const auto ppu_state = StarFoxPresentationPpu() ? make_ppu_state(StarFoxPresentationPpu())
                                  : starfox::simulation::SnesPpuState{};
     starfox::render::Framebuffer text_frame(
         static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
@@ -647,7 +623,7 @@ extern "C" unsigned StarFoxEnhancedDrawProjectedText(
     assets.text_renderer->draw(message_pointer, colour, size_adjustment,
                                render_pose, text_frame);
     return static_cast<unsigned>(
-        overlay_bgra_nonzero(text_frame, ppu_state, g_ppu, pixels, pitch));
+        overlay_bgra_nonzero(text_frame, ppu_state, StarFoxPresentationPpu(), pixels, pitch));
   } catch (const std::exception &) {
     return 0;
   }
@@ -666,32 +642,31 @@ extern "C" unsigned StarFoxEnhancedDrawCommsHud(
     auto &assets = shape_assets_for_rom(rom, rom_size);
     if (!assets.text_renderer)
       return 0;
-    const auto ppu_state = g_ppu ? make_ppu_state(g_ppu)
+    const auto ppu_state = StarFoxPresentationPpu() ? make_ppu_state(StarFoxPresentationPpu())
                                  : starfox::simulation::SnesPpuState{};
     starfox::render::Framebuffer comms(224u, 192u);
     comms.clear(0);
-    constexpr std::uint16_t face_base = 0xb5f4u;
-    std::uint8_t portrait_frame = 0;
-    if (face_pointer >= face_base) {
-      portrait_frame =
-          static_cast<std::uint8_t>((face_pointer - face_base) / 640u);
-    }
-    assets.text_renderer->draw_face(portrait_frame, 48, 152, comms, 7u * 16u,
-                                    false);
-    if (open_count != 0 && animation_count >= 5u) {
-      const bool three_lines =
-          (friend_id & 0x80u) != 0 || (friend_id & 0x7fu) == 5u;
-      const auto text_y = three_lines ? 153 : 169;
-      assets.text_renderer->draw_game_text(text_address, 83, text_y + 1,
-                                           comms, 7u * 16u, 9u, 175);
-      assets.text_renderer->draw_game_text(text_address, 82, text_y, comms,
-                                           7u * 16u, std::nullopt, 174);
+    // $70:0018 is shared with 3D shape/BSP decoding, so its post-frame
+    // value is not a latched portrait pointer. Sample the published BG1 HUD
+    // tiles instead, preserving the actual mouth/static/open/close animation
+    // and text without guessing which source task ran last.
+    starfox::render::Framebuffer published(256u, 224u);
+    published.clear(0);
+    starfox::render::BackgroundRenderer background;
+    background.draw_bg1(ppu_state, published,
+                        starfox::render::TilePriorityPass::all, 0, false);
+    const auto *captured = StarFoxPresentationPublishedBg1();
+    for (int y = 152; y < 192; y++) {
+      for (int x = 48; x < 176; x++) {
+        comms.set(x, y, captured ? captured[(y + 16) * 256 + x + 16]
+                                 : published.get(x + 16, y + 16));
+      }
     }
 
     unsigned visible = 0;
     const int origin_x = (width - 224) / 2;
     const int origin_y = 16;
-    const auto palette_level = brightness(g_ppu);
+    const auto palette_level = brightness(StarFoxPresentationPpu());
     for (std::uint32_t y = 0; y < comms.height(); y++) {
       const int target_y = origin_y + static_cast<int>(y);
       if (target_y < 0 || target_y >= height)
@@ -916,7 +891,7 @@ StarFoxEnhancedDrawNativeShape(uint8_t *pixels, size_t pitch, int width,
     renderer.draw(*shape, render_pose, shape_frame, false);
 
     std::size_t visible = 0;
-    const auto palette_level = brightness(g_ppu);
+    const auto palette_level = brightness(StarFoxPresentationPpu());
     for (std::uint32_t y = 0; y < shape_frame.height(); y++) {
       auto *row = pixels + static_cast<std::size_t>(y) * pitch;
       for (std::uint32_t x = 0; x < shape_frame.width(); x++) {
@@ -924,7 +899,7 @@ StarFoxEnhancedDrawNativeShape(uint8_t *pixels, size_t pitch, int width,
         if (colour == 0u)
           continue;
         const auto cgram =
-            g_ppu ? g_ppu->cgram[colour] : static_cast<std::uint16_t>(0);
+            StarFoxPresentationPpu() ? StarFoxPresentationPpu()->cgram[colour] : static_cast<std::uint16_t>(0);
         const std::uint8_t r = static_cast<std::uint8_t>(
             (static_cast<std::uint16_t>(expand5(cgram)) * palette_level) / 15u);
         const std::uint8_t g = static_cast<std::uint8_t>(
