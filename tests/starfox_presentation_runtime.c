@@ -39,7 +39,7 @@ int main(void) {
   assert(ppu.inidisp == 0x80);
   assert(StarFoxPresentationPpu()->inidisp == 15);
   assert(StarFoxPresentationBg2ScrollX(100) == 303);
-  assert(StarFoxPresentationIsWideWorld(true, false));
+  assert(StarFoxPresentationIsWideWorld(true, false, true));
   memset(output, 150, sizeof(output));
   RtlEnhancedRendererFrame frame = {0};
   frame.pixels = output; frame.pitch = 520 * 4;
@@ -54,13 +54,13 @@ int main(void) {
   StarFoxPresentationApplyBrightness(&frame, 0);
   assert(output[112 * frame.pitch] == 60);
   scanout(&ppu, 2, 0);
-  assert(!StarFoxPresentationIsWideWorld(true, false));
-  assert(!StarFoxPresentationIsWideWorld(true, false));
+  assert(!StarFoxPresentationIsWideWorld(true, false, true));
+  assert(!StarFoxPresentationIsWideWorld(true, false, true));
 
   // Menus retain the stock picture; only a new host overlay needs fading.
   ppu.screenEnabled[0] = 0x07;
   scanout(&ppu, 1, 6);
-  assert(!StarFoxPresentationIsWideWorld(true, false));
+  assert(!StarFoxPresentationIsWideWorld(true, false, true));
   memset(stock, 60, sizeof(stock)); memset(output, 0, sizeof(output));
   StarFoxPresentationRememberStock();
   for (int y = 0; y < 224; y++)
@@ -82,10 +82,37 @@ int main(void) {
 
   ppu.screenEnabled[0] = 0x13;
   scanout(&ppu, 1, 15);
-  assert(StarFoxPresentationIsWideWorld(true, false)); // hangar / flash
+  assert(StarFoxPresentationIsWideWorld(true, false, true)); // hangar / flash
+  assert(!StarFoxPresentationIsWideWorld(true, false, false)); // Game Over UI
   scanout(&ppu, 2, 15);
-  assert(!StarFoxPresentationIsWideWorld(true, true));
-  assert(!StarFoxPresentationIsWideWorld(false, false));
+  assert(!StarFoxPresentationIsWideWorld(true, true, true));
+  assert(!StarFoxPresentationIsWideWorld(false, false, true));
+  // Retail Stage 1 respawn: subtract white from BG1/BG2, leave OBJ lettering.
+  ppu.cgadsub = 0xe7; ppu.cgwsel = 0x12; ppu.fixedColor = 0x7fff;
+  ppu.screenEnabled[1] = 0;
+  ppu.windowsel = 0x800000; ppu.window2left = 16; ppu.window2right = 240;
+  scanout(&ppu, 2, 15);
+  uint8_t world[4] = {180, 130, 90, 255}, lettering[4] = {180, 130, 90, 255};
+  assert(StarFoxPresentationApplyPixelEffects(world, 128, 112, 256, 0));
+  assert(world[0] == 0 && world[1] == 0 && world[2] == 0);
+  assert(StarFoxPresentationApplyPixelEffects(lettering, 128, 112, 256, 4));
+  assert(lettering[0] == 180 && lettering[1] == 130 && lettering[2] == 90);
+  // The same fade must reach the newly visible widescreen world, too.
+  memset(world, 255, sizeof(world));
+  assert(StarFoxPresentationApplyPixelEffects(world, 100, 112, 800, 1));
+  assert(world[0] == 0 && world[1] == 0 && world[2] == 0);
+  for (int x = 0; x < 800; x += 799) {
+    memset(world, 255, sizeof(world));
+    assert(StarFoxPresentationApplyPixelEffects(world, x, 112, 800, 1));
+    assert(world[0] == 0 && world[1] == 0 && world[2] == 0);
+  }
+  // BG1 window clipping is independent of OBJ lettering and colour math.
+  ppu.cgadsub = 0; ppu.windowsel = 2; ppu.screenWindowed[0] = 1;
+  ppu.window1left = 64; ppu.window1right = 192;
+  scanout(&ppu, 2, 15);
+  assert(!StarFoxPresentationApplyPixelEffects(world, 128, 112, 256, 0));
+  assert(StarFoxPresentationApplyPixelEffects(world, 32, 112, 256, 0));
+  assert(StarFoxPresentationApplyPixelEffects(lettering, 128, 112, 256, 4));
   puts("PASS: current fade, blanking, centered menus, sparse world and stale scene");
   return 0;
 }

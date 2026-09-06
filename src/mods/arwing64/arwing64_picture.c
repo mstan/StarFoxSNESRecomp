@@ -1,5 +1,6 @@
 #include "arwing64_picture.h"
 #include "arwing64.h"
+#include "starfox_presentation.h"
 #include "common_rtl.h"
 #include "common_cpu_infra.h"
 #include "mod_audio.h"
@@ -265,7 +266,8 @@ unsigned arwing64_picture_draw(uint8_t *pixels, size_t pitch, int width, int hei
       uint32_t *dst = (uint32_t *)(pixels + y * pitch);
       for (int x = 0; x < width; x++) {
         int gx = x - 16 - (int)extra, gy = y - 16;
-        bool cover = y >= 168; /* current comms/meters, outside world matching */
+        /* Stock composition owns everything outside the Super FX viewport. */
+        bool cover = gx < 0 || gx >= 224 || gy < 0 || gy >= 152;
         if (pictures[selected].controls_preview)
           cover |= x < 24 + (int)extra || x >= 136 + (int)extra || y < 24 || y >= 112;
         if (gx >= 0 && gx < 224 && gy >= 0 && gy < 152) {
@@ -273,6 +275,17 @@ unsigned arwing64_picture_draw(uint8_t *pixels, size_t pitch, int width, int hei
           unsigned bits = foreground[a] | foreground[a+1] |
                           foreground[a+16] | foreground[a+17];
           cover |= (bits & (0x80u >> (gx & 7))) != 0;
+        }
+        if (!cover && dst[x] != before_overlay[y * width + x]) {
+          uint8_t brightest[4] = {255, 255, 255, 255};
+          /* A fully hidden world contributes no overlay. Preserve the stock
+           * OBJ lettering instead of painting an opaque black ship over it. */
+          cover = !StarFoxPresentationApplyPixelEffects(brightest,
+                                                       x - (int)extra, y, 256, 0);
+          cover |= !(brightest[0] | brightest[1] | brightest[2]);
+          if (!cover)
+            cover = !StarFoxPresentationApplyPixelEffects((uint8_t *)&dst[x],
+                                                         x - (int)extra, y, 256, 0);
         }
         if (cover) dst[x] = before_overlay[y * width + x];
       }

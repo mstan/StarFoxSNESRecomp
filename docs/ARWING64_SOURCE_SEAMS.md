@@ -86,6 +86,8 @@ Shape header (28 bytes): `+0 sh_points(2) +2 sh_bank +3 sh_faces(2)
 | wing state (GSU mirror) | `$70:2B26` | 2 | 0 both, 1 left gone, 2 right gone, 3 both gone |
 | `playerflymode` | `$14DA` (GSU mirror `$70:01A0`) | 1 | b0 diefall, b1 dieYrot, b2 water, b3 shadows, b4 wobble |
 | `CurViewMode` | `$14DB` | 1 | 0 far 3rd person, 1 close 3rd person, 2 to-cockpit, 3 COCKPIT, 4 to-normal |
+| `MaxViewMode` | `$14DC` | 1 | Corneria permits the two outside views; cockpit validation needs a space stage |
+| scene preset | `$1741` | 2 | `$0003` during Scramble/hangar; distinguishes that Mode 1 world from menu scenes with leftover player objects |
 | boost meter anim | `$70:01BC` | 2 | 40 full, -2/frame boosting, +1/frame recovering |
 | boost charge | `$70:01BA` | 2 | nonzero while boost/brake burning |
 | engine sound flag | `$1F43` | 1 | `$04` normal, `$08` boosting, `$0C` braking |
@@ -99,7 +101,7 @@ Shape header (28 bytes): `+0 sh_points(2) +2 sh_bank +3 sh_faces(2)
 | shots alive | `$1523` | 1 | max 4 single / 8 twin |
 | `gameflags` | `$14D0` | 1 | b1 player dying, b6 player dead, b7 stage done |
 | `gameflags2` | `$14D1` | 1 | b3 in game |
-| player object ptr | `$1238` | 2 | `al_shape +$04`, `al_type +$09`, `al_sflags +$1D`, `al_HP +$2A`, `al_collflags +$2E`; record `$38`, 70 slots from `$0336` |
+| player object ptr | `$1238` | 2 | `al_shape +$04`, `al_type +$09`, `al_sflags +$1D`, `al_HP +$2A`, `al_collflags +$2E`; record `$36`, 70 slots from `$0336` |
 | camera | `$14F6 / $14F8 / $14FA` | 2 each | pviewpos x/y/z |
 | player world pos | `$150D / $150F / $1511` | 2 each | |
 | player speed | `$1509` | 2 | |

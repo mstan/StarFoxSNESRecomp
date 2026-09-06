@@ -35,7 +35,8 @@ original picture centered at its original proportions. Fully blank transition
 frames remain blank. The chosen display preset still sets the output width.
 
 `starfox_presentation.c` captures registers and palette during the visible
-picture, plus each scanline's brightness and BG2 horizontal scroll after HDMA.
+picture, plus each scanline's brightness, windows, colour math and BG2
+horizontal scroll after HDMA.
 It never writes guest state. End-of-frame forced blank is not the brightness
 of the picture that was just displayed. Native layers and the SF64 mesh follow
 the current fade once, after composition; stock menu pixels keep their original
@@ -45,9 +46,19 @@ HDMA blanking stripe into the expanded scene.
 The retail world gate recognizes the double-buffered Super FX BG1 layout in
 Mode 1 or 2, BG1/BG2/OBJ enabled, a current source snapshot and a consistent
 visible world region. The controls IRQ flag excludes the ship demonstration.
-Mode 3 map/briefing and title layer layouts keep the stock center. Object counts
+Mode 1 additionally requires gameplay meters or the retail Scramble preset
+(`$7E:1741 = $0003`). A leftover player object does not make a menu a flight
+scene. Mode 3 map/briefing and title layer layouts keep the stock center. Object counts
 and pixel coverage do not decide ownership: sparse gameplay should stay wide.
 Allocation, shape decode or native PPU failures fall back to the stock center.
+
+Native BG layers and SF64 overlays obey fixed-colour addition/subtraction and
+main-screen windows before the final brightness pass. The respawn card uses
+white subtraction to hide the world while leaving its OBJ lettering visible;
+the compositor retains the highest-priority OBJ layer for that lettering.
+Wide windows map across the original 224-pixel world viewport, excluding its
+unused side borders. Authentic SF64 overlays remain inside that viewport.
+Blending with an active secondary plane still needs separate effect coverage.
 
 The native shape pass uses a transparent scratch buffer. The PPU compositor
 omits the original Super FX world plane before composing that native pass.
@@ -151,6 +162,18 @@ hangar and mission entry. Inspected transitions show no stale picture or HUD
 garble. Eight paused checkpoints through frame 8100 match Authentic versus
 Enhanced for full WRAM, GSU RAM, original VRAM, and exposed GSU state. Arwing64
 off/on independently matches the same eight checkpoints.
+
+September 6 coverage extended the route through repeated deaths and exposed
+the respawn colour-math and Game Over scene-ownership defects described above.
+The corrected Authentic respawn card is pixel-identical to stock; the 32:9
+version matches its lettering and has fully black sides. All 26 title tests
+pass, including border windows and preservation of lettering during a hidden
+world overlay.
+The final Authentic/21:9 runs exited cleanly through frame 16530 and matched
+full WRAM, GSU RAM, original VRAM and GSU registers/clocks/history at 11 paused
+checkpoints from 4450 through 16500. The restart card at 10950 and Game Over at
+16050/16500 have pixel-identical stock centers and black side areas. Full-stage
+owner playtests and other routes remain outstanding.
 
 Reproduce the presentation comparison with `tools/validate_arwing64.py
 --feature EnhancedRenderer` and a config containing a wide `Widescreen` preset.

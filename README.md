@@ -148,7 +148,8 @@ renderer path.
 See [docs/TRUE_WIDESCREEN.md](docs/TRUE_WIDESCREEN.md) for the rendering
 model, validation notes, and the remaining spawn/culling audit.
 
-An adaptive display mode is not implemented yet.
+Presentation adapts within the selected width: gameplay uses the wider scene,
+while menus and other original screens stay centered.
 
 ## Enhanced-Derived Mods
 

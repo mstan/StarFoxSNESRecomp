@@ -17,6 +17,13 @@ static uint64_t generation;
 int arwing64_active(void) { return enabled; }
 uint64_t snes_mod_audio_reset_generation(void) { return generation; }
 static unsigned shots_drawn;
+static int hidden_world;
+bool StarFoxPresentationApplyPixelEffects(uint8_t pixel[4], int x, int y,
+                                         int width, unsigned layer) {
+  (void)x; (void)y; (void)width; (void)layer;
+  if (hidden_world) pixel[0] = pixel[1] = pixel[2] = 0;
+  return true; // Actual colour math is covered by starfox_presentation_runtime.c.
+}
 uint32_t arwing64_draw_shot(uint8_t *pixels, size_t pitch, int width, int height,
     const uint8_t *rom, size_t size, const StarFoxEnhancedNativeShapePose *pose,
     int kind, int black) {
@@ -103,6 +110,14 @@ int main(void) {
       assert(image[40*256+80]==0xffffffffu); /* ship inside preview */
     } else assert(image[20*256+20]==0xffffffffu); /* unoccluded mesh remains */
     assert(image[180*256+100]==0); /* HUD stays in front */
+    assert(image[100*256+15]==0 && image[100*256+240]==0);
+    assert(image[15*256+100]==0); /* original world border stays black */
+    hidden_world=1;
+    memset(image,0x3c,sizeof(image));
+    arwing64_picture_draw((uint8_t *)image,256*4,256,224,rom,sizeof(rom),0);
+    for (unsigned pixel=0; pixel<256*224; pixel++)
+      assert(image[pixel]==0x3c3c3c3cu); /* hidden mesh cannot cover OBJ lettering */
+    hidden_world=0;
     uint16_t saved=ppu.vram[19*16]; ppu.vram[19*16]^=0x5555;
     arwing64_picture_begin_draw();
     assert(arwing64_picture_pose(0,&pose));

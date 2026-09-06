@@ -9,10 +9,19 @@ static uint8_t g_presentation_mode[224];
 static int16_t g_bg2_scroll_x[224];
 static uint8_t g_stock_pixels[224][256 * 4];
 static int g_presentation_ppu_valid;
+typedef struct PixelEffects {
+  uint32_t windowsel;
+  uint16_t logic, fixed;
+  uint8_t left[2], right[2], windowed, main, sub, math, color;
+} PixelEffects;
+static PixelEffects g_effects[224];
+static int g_first_visible, g_last_visible;
 
 void StarFoxPresentationCaptureLine(int line) {
   if (line == 0) {
     g_presentation_ppu_valid = 0;
+    g_first_visible = 224;
+    g_last_visible = -1;
     memset(g_presentation_brightness, 0, sizeof(g_presentation_brightness));
     memset(g_presentation_mode, 0, sizeof(g_presentation_mode));
   }
@@ -21,7 +30,17 @@ void StarFoxPresentationCaptureLine(int line) {
   g_presentation_brightness[line - 1] =
       PPU_forcedBlank(g_ppu) ? 0 : PPU_brightness(g_ppu);
   g_presentation_mode[line - 1] = PPU_mode(g_ppu);
+  if (g_presentation_brightness[line - 1]) {
+    if (g_first_visible == 224) g_first_visible = line - 1;
+    g_last_visible = line - 1;
+  }
   g_bg2_scroll_x[line - 1] = (int16_t)g_ppu->hScroll[1];
+  g_effects[line - 1] = (PixelEffects){
+    g_ppu->windowsel, g_ppu->wbgobjlog, g_ppu->fixedColor,
+    {g_ppu->window1left, g_ppu->window2left},
+    {g_ppu->window1right, g_ppu->window2right},
+    g_ppu->screenWindowed[0], g_ppu->screenEnabled[0],
+    g_ppu->screenEnabled[1], g_ppu->cgadsub, g_ppu->cgwsel};
   /* Sample the visible world, before the bottom-of-screen HDMA blank. The
    * copy is host-only; emulated registers and memory remain untouched. */
   if (line == 112) {
@@ -51,10 +70,11 @@ const uint8_t *StarFoxPresentationPublishedBg1(void) {
              ? PpuGetMode2LayerCapture(g_ppu) : NULL;
 }
 
-bool StarFoxPresentationIsWideWorld(bool source_current, bool controls) {
+bool StarFoxPresentationIsWideWorld(bool source_current, bool controls,
+                                    bool flight_scene) {
   const unsigned mode = g_presentation_ppu.bgmode & 7;
   if (!g_presentation_ppu_valid || !source_current ||
-      (mode != 1 && mode != 2) || controls ||
+      (mode != 1 && mode != 2) || (mode == 1 && !flight_scene) || controls ||
       (g_presentation_ppu.screenEnabled[0] & 0x13) != 0x13 ||
       (g_presentation_ppu.bgXsc[0] & 0xfc) != 0x2c)
     return false;
@@ -66,6 +86,79 @@ bool StarFoxPresentationIsWideWorld(bool source_current, bool controls) {
       return false;
   }
   return true;
+}
+
+static bool window_inside(const PixelEffects *e, int x, unsigned layer) {
+  unsigned flags = e->windowsel >> (layer * 4);
+  bool w1 = x >= e->left[0] && x <= e->right[0];
+  bool w2 = x >= e->left[1] && x <= e->right[1];
+  if (flags & 1) w1 = !w1;
+  if (flags & 4) w2 = !w2;
+  if (!(flags & 2)) return (flags & 8) && w2;
+  if (!(flags & 8)) return w1;
+  switch ((e->logic >> (layer * 2)) & 3) {
+    case 0: return w1 || w2;
+    case 1: return w1 && w2;
+    case 2: return w1 != w2;
+    default: return w1 == w2;
+  }
+}
+
+static bool window_mode(unsigned mode, bool inside) {
+  return mode == 3 || (mode == 1 && !inside) || (mode == 2 && inside);
+}
+
+bool StarFoxPresentationApplyPixelEffects(uint8_t pixel[4], int x, int y,
+                                         int width, unsigned layer) {
+  if (!g_presentation_ppu_valid || width <= 0 || y < 0 || y >= 224)
+    return true;
+  int effect_y = y;
+  if (g_last_visible >= 0) {
+    if (effect_y < g_first_visible) effect_y = g_first_visible;
+    if (effect_y > g_last_visible) effect_y = g_last_visible;
+  }
+  const PixelEffects *e = &g_effects[effect_y];
+  unsigned window_layer = layer == 6 ? 4 : layer;
+  if (window_layer < 5 && !(e->main & (1u << window_layer))) return false;
+  bool masked = window_layer < 5 && (e->windowed & (1u << window_layer));
+  bool fixed_math = layer < 6 && (e->math & (1u << layer)) &&
+                    !((e->color & 2) && e->sub);
+  if (!masked && !(e->color >> 6) && !fixed_math) return true;
+  // The expanded world replaces the 224-pixel Super FX viewport, whose
+  // hardware coordinates start at 16. Do not expand its unused side borders
+  // into strips of scenery exempt from a full-world fade.
+  int wx = width == 256 ? x : 16 + x * 224 / width;
+  if (masked && window_inside(e, wx, window_layer)) return false;
+  bool color_window = window_inside(e, wx, 5);
+  if (window_mode(e->color >> 6, color_window))
+    pixel[0] = pixel[1] = pixel[2] = 0;
+  if (!fixed_math ||
+      window_mode((e->color >> 4) & 3, color_window)) return true;
+  // Retail wipes use the fixed colour, including TS=0 with add-subscreen
+  // selected (the subscreen backdrop resolves to fixed colour in that case).
+  // Live secondary-plane blending is separate from this fixed-colour pass.
+  bool half = (e->math & 0x40) && !(e->color & 2);
+  for (unsigned channel = 0; channel < 3; channel++) {
+    unsigned five = (e->fixed >> ((2 - channel) * 5)) & 31;
+    int fixed = (int)((five << 3) | (five >> 2));
+    int value = pixel[channel] + ((e->math & 0x80) ? -fixed : fixed);
+    if (value < 0) value = 0;
+    if (half) value /= 2;
+    if (value > 255) value = 255;
+    pixel[channel] = (uint8_t)value;
+  }
+  return true;
+}
+
+void StarFoxPresentationApplyWorldEffects(uint8_t *pixels, size_t pitch,
+                                         int width, int height) {
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      uint8_t *pixel = pixels + (size_t)y * pitch + (size_t)x * 4;
+      if (pixel[3] && !StarFoxPresentationApplyPixelEffects(pixel, x, y, width, 0))
+        memset(pixel, 0, 4);
+    }
+  }
 }
 
 void StarFoxPresentationApplyBrightness(const RtlEnhancedRendererFrame *frame,

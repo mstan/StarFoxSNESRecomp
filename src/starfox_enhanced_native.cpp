@@ -223,6 +223,11 @@ static void write_bgra(const starfox::render::Framebuffer &source,
       dst[1] = g;
       dst[2] = r;
       dst[3] = 0xff;
+      const auto index = source.get(x, y);
+      const unsigned layer = index >= 192 ? 4 : index >= 128 ? 6 : index ? 1 : 5;
+      if (!StarFoxPresentationApplyPixelEffects(dst, (int)x, (int)y,
+                                                (int)source.width(), layer))
+        dst[0] = dst[1] = dst[2] = 0;
     }
   }
 }
@@ -230,7 +235,7 @@ static void write_bgra(const starfox::render::Framebuffer &source,
 static std::size_t overlay_bgra_nonzero(
     const starfox::render::Framebuffer &source,
     const starfox::simulation::SnesPpuState &ppu_state, const Ppu *ppu,
-    std::uint8_t *pixels, std::size_t pitch) {
+    std::uint8_t *pixels, std::size_t pitch, bool effects = false) {
   std::size_t visible = 0;
   const std::uint8_t level = brightness(ppu);
   for (std::uint32_t y = 0; y < source.height(); y++) {
@@ -240,7 +245,8 @@ static std::size_t overlay_bgra_nonzero(
       if (palette_index == 0u)
         continue;
       const std::uint16_t cgram = ppu_state.cgram[palette_index];
-      std::uint8_t *dst = row + static_cast<std::size_t>(x) * 4u;
+      std::uint8_t *target = row + static_cast<std::size_t>(x) * 4u;
+      std::uint8_t dst[4];
       dst[2] = static_cast<std::uint8_t>(
           (static_cast<std::uint16_t>(expand5(cgram)) * level) / 15u);
       dst[1] = static_cast<std::uint8_t>(
@@ -248,7 +254,12 @@ static std::size_t overlay_bgra_nonzero(
       dst[0] = static_cast<std::uint8_t>(
           (static_cast<std::uint16_t>(expand5(cgram >> 10u)) * level) / 15u);
       dst[3] = 0xff;
-      visible++;
+      unsigned layer = palette_index >= 192 ? 4 : palette_index >= 128 ? 6 : 0;
+      if (!effects || StarFoxPresentationApplyPixelEffects(dst, (int)x, (int)y,
+                                        (int)source.width(), layer)) {
+        std::memcpy(target, dst, 4);
+        visible++;
+      }
     }
   }
   return visible;
@@ -275,7 +286,8 @@ static std::size_t overlay_bgra_nonzero_at(
       if (target_x < 0 || target_x >= target_width)
         continue;
       const std::uint16_t cgram = ppu_state.cgram[palette_index];
-      std::uint8_t *dst = row + static_cast<std::size_t>(target_x) * 4u;
+      std::uint8_t *target = row + static_cast<std::size_t>(target_x) * 4u;
+      std::uint8_t dst[4];
       dst[2] = static_cast<std::uint8_t>(
           (static_cast<std::uint16_t>(expand5(cgram)) * level) / 15u);
       dst[1] = static_cast<std::uint8_t>(
@@ -283,7 +295,11 @@ static std::size_t overlay_bgra_nonzero_at(
       dst[0] = static_cast<std::uint8_t>(
           (static_cast<std::uint16_t>(expand5(cgram >> 10u)) * level) / 15u);
       dst[3] = 0xff;
-      visible++;
+      if (StarFoxPresentationApplyPixelEffects(dst, target_x, target_y,
+                                               target_width, 0)) {
+        std::memcpy(target, dst, 4);
+        visible++;
+      }
     }
   }
   return visible;
@@ -452,7 +468,10 @@ static bool oam_object_is_gameplay_hud(
 static starfox::simulation::SnesPpuState gameplay_hud_oam_only(
     starfox::simulation::SnesPpuState ppu) {
   for (std::size_t object = 0; object < 128u; object++) {
-    if (oam_object_is_gameplay_hud(ppu, object))
+    // Priority 3 sits above the Super FX BG1 plane. Respawn's STAGE lettering
+    // is not a HUD-band sprite, but must survive the world colour fade too.
+    if (oam_object_is_gameplay_hud(ppu, object) ||
+        ((ppu.oam[object * 4u + 3u] >> 4u) & 3u) == 3u)
       continue;
     const auto low = object * 4u;
     ppu.oam[low] = 0u;
@@ -510,7 +529,7 @@ extern "C" unsigned StarFoxEnhancedDrawGameplayHudSprites(
                                  viewport_origin, true, true);
   }
   return static_cast<unsigned>(
-      overlay_bgra_nonzero(framebuffer, ppu_state, StarFoxPresentationPpu(), pixels, pitch));
+      overlay_bgra_nonzero(framebuffer, ppu_state, StarFoxPresentationPpu(), pixels, pitch, true));
 }
 
 extern "C" unsigned StarFoxEnhancedDrawGameplayHudMeters(
@@ -680,7 +699,8 @@ extern "C" unsigned StarFoxEnhancedDrawCommsHud(
         if (target_x < 0 || target_x >= width)
           continue;
         const auto cgram = ppu_state.cgram[palette_index];
-        auto *dst = row + static_cast<std::size_t>(target_x) * 4u;
+        auto *target = row + static_cast<std::size_t>(target_x) * 4u;
+        std::uint8_t dst[4];
         dst[2] = static_cast<std::uint8_t>(
             static_cast<std::uint16_t>(expand5(cgram)) * palette_level / 15u);
         dst[1] = static_cast<std::uint8_t>(
@@ -690,7 +710,10 @@ extern "C" unsigned StarFoxEnhancedDrawCommsHud(
             static_cast<std::uint16_t>(expand5(cgram >> 10u)) * palette_level /
             15u);
         dst[3] = 0xff;
-        visible++;
+        if (StarFoxPresentationApplyPixelEffects(dst, target_x, target_y, width, 0)) {
+          std::memcpy(target, dst, 4);
+          visible++;
+        }
       }
     }
     return visible;

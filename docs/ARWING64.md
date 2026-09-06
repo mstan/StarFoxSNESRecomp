@@ -172,10 +172,20 @@ The owner approved the corrected ship, shots and controls preview on
 September 5, 2026. The README includes an unaltered gameplay capture from that
 implementation. Broader release coverage still requires full Corneria runs in
 both presentation modes (including damage, wing loss, roll, boost/brake,
-cockpit and reset/load), and running
+and reset/load), a space-stage cockpit check, and running
 `tools/make_release.ps1`. Packaging excludes the cache and extractor tool and
 rejects nested owner ROMs, extracted WAVs and mesh blobs. The release config
 always disables Arwing64 and clears the developer's SF64 ROM path.
+
+The September 6 respawn fix applies the game's colour window and white
+subtraction to the SF64 overlay. A fully hidden ship contributes no pixels,
+preserving the original STAGE 1 lettering. The Authentic restart card matches
+the stock capture pixel for pixel; the 32:9 capture has the same lettering and
+black side areas. These are presentation changes only.
+
+An isolated save/load probe recovered the picture and audio, but exact resumed
+CPU/scheduler fidelity remains an audit item (`beads-8wg.8.4`). This visual check
+does not establish that the entire save-state resumes identically.
 
 ## Credits
 

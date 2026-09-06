@@ -40,6 +40,8 @@ enum {
   kRamMsgCount1 = 0x189d,
   kRamMsgCount2 = 0x189e,
   kRamShadowHeight = 0x1957,
+  kRamScenePreset = 0x1741,
+  kScenePresetScramble = 0x0003,
   kGsuFacePtr = 0x0018,
   kGsuVanishX = 0x0034,
   kGsuVanishY = 0x0036,
@@ -1771,7 +1773,9 @@ StarFoxEnhancedRenderFrame(RtlEnhancedRendererFrame *frame) {
   uint8_t *native_world = NULL;
   bool wide_world = native_shape_overlay_enabled() &&
       StarFoxPresentationIsWideWorld(source_snapshot_current(),
-                                    ram_byte(0x1f0d) != 0);
+                                    ram_byte(0x1f0d) != 0,
+                                    gsu_word(kGsuMeters) ||
+                                    ram_word(kRamScenePreset) == kScenePresetScramble);
   const bool gameplay_hud = gsu_word(kGsuMeters) != 0;
   int native_ppu_done = 0;
   if (wide_world) {
@@ -1794,6 +1798,8 @@ StarFoxEnhancedRenderFrame(RtlEnhancedRendererFrame *frame) {
   }
   wide_world = wide_world && native_ppu_done;
   if (wide_world) {
+    StarFoxPresentationApplyWorldEffects(native_world, native_world_pitch,
+                                         frame->width, frame->height);
     composite_bgra_nonzero(frame->pixels, frame->pitch, native_world,
                            native_world_pitch, frame->width, frame->height);
     if (gameplay_hud) {
