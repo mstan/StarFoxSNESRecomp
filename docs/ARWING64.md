@@ -3,8 +3,8 @@
 Arwing64 replaces the player presentation with the Star Fox 64 Arwing, wing
 damage variants, engine glow, roll shield, and ship sound effects. It works with
 Authentic 4:3 and Enhanced widescreen. It is an opt-in development preview:
-the strict gameplay-state comparison is still under investigation and owner
-playtesting is pending. Do not treat this branch as release-approved.
+automated gameplay-state checks pass and owner playtesting is pending.
+Do not treat this branch as release-approved.
 
 ## Enable it
 
@@ -30,10 +30,10 @@ them. Keep this directory local. It contains Nintendo-derived mesh, textures,
 and audio and must never be committed, shared, or bundled in a release.
 
 Missing or incorrect ROMs, invalid caches, unavailable audio clips when audio
-is enabled, and ROM patch mismatches leave the stock presentation active. A
+is enabled, and retail ROM mismatches leave the stock presentation active. A
 corrupt committed cache is rejected rather than silently accepted. To rebuild,
 close the game, remove your local `arwing64_cache` directory, and restart with
-the correct ROM selected. Disabling the feature restores the ROM patch and
+the correct ROM selected. Disabling the feature removes its picture view and
 unloads its audio. Music, comms, ambient sounds and unmapped SFX remain SNES.
 
 ## What the audio renderer does
@@ -84,31 +84,44 @@ arwing64_tool <owner-rom> <output-directory> --sample 0
 ```
 
 The last command writes raw little-endian PCM for the developer differential.
-TCP debug builds expose `game arwing status`, `state`, `cache`, `patch`, and
+TCP debug builds expose `game arwing status`, `state`, `cache`, `picture`, and
 `audio`. Presentation-only overrides are available with
 `game arwing force wing=1 roll=32 boost=1` and `game arwing force clear`.
 For scripted launches the SNES ROM must be the final positional argument or
 the launcher can wait for ROM selection.
 
+The engine runs the original CPU and Super FX work unchanged. An optional
+private replay removes the original ship from a copy of the picture; another
+private pass supplies foreground coverage. The stock post-pass uses the camera
+pose belonging to that exact picture and restores foreground objects and HUD
+over the SF64 mesh. Enhanced mode also uses its native world's draw order.
+No guest ROM, WRAM, GSU RAM or VRAM is patched. If the picture cannot be
+matched safely, that stock frame keeps its original ship.
+
+`tools/validate_arwing64.py` runs a supplied input script twice with the feature
+off/on. It pauses at exact frame checkpoints and compares full WRAM, GSU RAM,
+VRAM hashes and graphics-processor registers, clocks and instruction history.
+Use an ignored output directory, for example:
+
+```powershell
+python tools/validate_arwing64.py --exe build-arwing/StarFoxSNESRecomp.exe --config _arwing_validation/arwing_authentic.ini --script _arwing_validation/route_to_mission.script --snes-rom starfox.sfc --output _arwing_validation/parity
+```
+
 ## Validation status and limits
 
 On 2026-09-05, the native audio differential and cue/lifecycle tests passed;
-the mesh census matched Torch. Two repeated stock runs matched full 128 KiB
-WRAM at all 16 checkpoints from guest frames 5000 through 6500. Arwing64 with
-audio on and off also matched at every checkpoint. However, stock versus the
-Arwing64 visual path differed beyond the expected shape references, including
-player/camera positions. An isolation build that still draws the host Arwing
-but retains the stock ROM table matched stock WRAM exactly at every checkpoint.
-This identifies the existing guest-visible hide patch as the cause. That
-strict faithfulness gate remains open under
-`beads-8wg.8.3.5`; passing visual screenshots is not proof of gameplay parity.
-
-The guarded patch changes only six ROM bytes at `0x300D5`; the SNES program
-then copies changed shape references into its own state. See
-[the source seam map](ARWING64_SOURCE_SEAMS.md) for the retail addresses and
-collision/header evidence. With both wings gone the original reduced GSU
-stub remains underneath the host mesh. Enhanced transition fallback and
-broader effects parity remain separate development limitations.
+the mesh census matched Torch. The former six-byte guest ROM hide patch
+changed timing and was removed. Its private replay replacement matched full
+128 KiB WRAM with the feature off/on at all 43 checkpoints from frames 5000
+through 9200. The route exercises mission entry, firing, braking, a bomb and
+a barrel roll. Seven additional paused checkpoints matched full WRAM, GSU RAM
+and original VRAM hashes, and all exposed GSU registers, clocks and instruction
+history, with both background and foreground passes active. Engine tests independently verify that private replay changes
+leave original RAM, registers, caches and clocks identical. PPU tests cover
+both renderers, CPU reads/writes and default-off restoration. Synthetic title
+tests cover four damage shapes, ambiguous/cyclic input, cockpit, changed
+world generations, independently updated HUD and reset invalidation.
+See [the source seam map](ARWING64_SOURCE_SEAMS.md) for the retail addresses.
 
 The engine branch remains based on `a595a41` pending the engine-main regression
 tracked in `beads-8wg.2.27`. Do not rebase this preview onto the regressed main.
@@ -117,12 +130,12 @@ Authentic and Enhanced scripted runs through frame 9500 both exited cleanly,
 with 14 clips loaded, 23 mapped requests consumed and a roll cue played.
 Audio on/off full-WRAM comparisons also matched all 19 gameplay checkpoints
 from frames 7400 through 9200 while those cues and roll were exercised.
-Corrupted WAV, corrupted mesh and missing-ROM runtime probes all kept the patch
-off and audio disabled. The local preview ZIP passed packaging; synthetic
+Corrupted WAV, corrupted mesh and missing-ROM runtime probes kept the feature
+inactive and audio disabled. The local preview ZIP passed packaging; synthetic
 negative tests rejected nested caches, extracted WAV names, ROM names and a
-renamed mesh blob. These passes do not waive the state-parity release blocker.
+renamed mesh blob.
 
-Before release: resolve strict state parity, exercise full Corneria runs in
+Before release: exercise full Corneria runs in
 both presentation modes (including damage, wing loss, roll, boost/brake,
 cockpit and reset/load), obtain the owner's visual/audio verdict, and run
 `tools/make_release.ps1`. Packaging excludes the cache and extractor tool and

@@ -46,8 +46,8 @@ stability problems through [GitHub Issues](../../issues).
 
 The `feat/arwing64` development branch also offers an opt-in **Star Fox 64
 Arwing** with wing damage, glow, roll shield and ship audio, extracted locally
-from your own SF64 US v1.1 ROM. Its strict gameplay-state validation remains
-open; see [Arwing64 setup and validation](docs/ARWING64.md). Asset/audio semantics
+from your own SF64 US v1.1 ROM. Automated gameplay-state comparisons pass;
+owner playtesting remains before release. See [Arwing64 setup and validation](docs/ARWING64.md). Asset/audio semantics
 are informed by sonicdcer/sf64 (CC0), with Torch (MIT) as a development oracle,
 on the Star Fox Enhanced presentation foundation credited above.
 

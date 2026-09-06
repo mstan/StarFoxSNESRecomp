@@ -60,6 +60,7 @@ add_executable(StarFoxSNESRecomp
   src/starfox_rtl.c
   src/starfox_spc_player.c
   src/mods/arwing64/arwing64.c
+  src/mods/arwing64/arwing64_picture.c
   src/mods/arwing64/arwing64_audio.c
   src/mods/arwing64/sf64_audio_render.c
   src/mods/arwing64/arwing64_extract.c

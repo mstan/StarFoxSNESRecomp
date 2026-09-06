@@ -149,7 +149,7 @@ static std::uint16_t ram_word16(std::uint16_t address) {
 static void copy_vram_bytes(starfox::simulation::SnesPpuState &out,
                             const Ppu *ppu) {
   for (std::size_t i = 0; i < 0x8000u; i++) {
-    const std::uint16_t word = ppu->vram[i];
+    const std::uint16_t word = PpuRenderVram(ppu)[i];
     out.vram[i * 2u] = static_cast<std::uint8_t>(word);
     out.vram[i * 2u + 1u] = static_cast<std::uint8_t>(word >> 8);
   }

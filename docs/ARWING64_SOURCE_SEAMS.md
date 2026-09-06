@@ -1,7 +1,7 @@
 # Arwing64 source/host seam map
 
 Retail Star Fox (USA) v1.2 addresses that the Arwing64 mod (Star Fox 64 Arwing
-rendered in place of the Super FX player ship) reads or patches. Every address
+rendered in place of the Super FX player ship) reads. Every address
 below was byte-verified against the retail ROM (`starfox.sfc`, 1 MiB LoROM) on
 2026-09-03; the UltraStarFox / Star Fox Enhanced sources supply semantics only,
 their build addresses differ (WRAM block `$14C2..$15A2` is offset by `$8B`).
@@ -10,7 +10,7 @@ Sources: `_refs/StarFoxDisassembly` (retail, SpyderTL), UltraStarFox
 `SF/INC/GILESALC.INC`, `SF/INC/SOUNDEQU.INC`, `SF/STRAT/GSTRATS.ASM`,
 `SF/ASM/SOUND.ASM`, `SF/STRAT/STRATROU.ASM`, `SF/ASM/COLDET.ASM`.
 
-## Player shape selection and the invisible-player patch
+## Player shape selection and private presentation replay
 
 | Item | Retail | Notes |
 |---|---|---|
@@ -24,12 +24,25 @@ Sources: `_refs/StarFoxDisassembly` (retail, SpyderTL), UltraStarFox
 
 Collision reads the shape header (`sh_radius, sh_xmax, sh_ymax, sh_zmax` ->
 `cl_*`, STRATROU.ASM:58-72); sort uses `sh_sortz`; explosions use `sh_size`.
-Therefore the guarded ROM patch writes `cc d2 cc d2 cc d2` over ROM
-`0x300D5..0x300DA` (row 0 slots +0/+2/+4 -> `nullPlayer`). Slot +6 (both
-wings gone, `$D3E4`, xmax 20) is left stock; the host draws the both-broken
-variant over it and the GSU ship there is a 16-vertex stub that the host
-model fully covers. Only `SetArwingModel` / `DoInitArwingModelBuffer` read
-this table.
+An earlier six-byte ROM patch redirected three player slots to `nullPlayer`.
+That changed GSU workload and failed the gameplay-state comparison. It has
+been removed: the ROM, WRAM and original GSU RAM now remain unchanged.
+
+The opt-in engine captures retail `RenderObjects` at `$01:AC1D`. Its sorted
+input list starts at `$70:021E`; each node has next at +0, angles at +4..6,
+flags +7, shape +8, shadow coordinates +10..15, camera y/x/z +16/+18/+20.
+The private RAM copy replaces the unique matching player node's shape with
+`$D2CC`, including the both-wings-lost model. Ambiguous or malformed lists
+are declined. A second private pass starts after that node with a cleared
+picture, exporting foreground occluders. The shadow pass (`$01A0` bit 3)
+and background prepasses (`$019E`, `$01BE`) are disabled only in that mask.
+
+Retail framebuffer data is 28 columns of 24 four-bit tiles (`0x5400` bytes).
+The game transfers it in two `0x2A00`-byte DMA blocks and updates the bottom
+five tile rows separately for comms/meters. Presentation matches every byte
+of the top 19 rows in each column against BG1 VRAM, retains the current HUD,
+and uses the matching task's camera pose. Only rendering reads the alternate
+VRAM view; CPU ports, DMA writes and saved guest memory use original VRAM.
 
 MYSHIP_4 geometry (shift 0, +Z forward, +Y down): 16 vertices, bbox
 x -36..36, y -11..14, z -40..80; header half-extents 36/14/80, size 80.

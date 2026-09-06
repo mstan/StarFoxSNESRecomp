@@ -8,7 +8,7 @@
 #include "common_cpu_infra.h"
 #include "common_rtl.h"
 #include "config.h"
-#include "guarded_patch.h"
+#include "arwing64_picture.h"
 #include "host_mesh.h"
 #include "host_paths.h"
 #include "sha256.h"
@@ -51,16 +51,13 @@ enum {
   kObjRotZ = 0x14,
   kObjPoolBase = 0x0336,
   kObjPoolEnd = 0x0336 + 0x36 * 70,
-  /* Guest ROM: ArwingModelIDTable row 0 slots +0/+2/+4 -> nullPlayer. */
+  /* Read-only retail identity guard, ArwingModelIDTable row 0. */
   kRomShapeTable = 0x300d5,
   kRomShapeTablePatchBytes = 6,
 };
 
 static const uint8_t kShapeTableExpected[kRomShapeTablePatchBytes] = {
     0x20, 0xd3, 0xac, 0xd3, 0x74, 0xd3};
-static const uint8_t kShapeTableReplacement[kRomShapeTablePatchBytes] = {
-    0xcc, 0xd2, 0xcc, 0xd2, 0xcc, 0xd2};
-
 /* N64 model units -> SNES units: N64 wingspan 96 (x -48..48) to the Super FX
  * MYSHIP_4 wingspan 72 (x -36..36). */
 static const float kModelScale = 72.0f / 96.0f;
@@ -73,8 +70,6 @@ typedef struct Runtime {
   char configured_rom[1024];
   int configured_sfx;
   HostMesh *mesh;
-  GuardedPatch patch;
-  int patch_registered;
   Arwing64Stats stats;
   int list_broken_a, list_broken_b, list_wing_a, list_wing_b;
   int list_orb[4], list_shield;
@@ -116,7 +111,7 @@ const char *arwing64_status_name(Arwing64Status status) {
   case kArwing64_RomInvalid: return "rom-invalid";
   case kArwing64_ExtractFailed: return "extract-failed";
   case kArwing64_CacheInvalid: return "cache-invalid";
-  case kArwing64_PatchFailed: return "patch-failed";
+  case kArwing64_RetailMismatch: return "retail-mismatch";
   case kArwing64_Active: return "active";
   }
   return "unknown";
@@ -305,46 +300,17 @@ static int build_mesh_from_rom(const char *rom_path) {
   return 1;
 }
 
-/* ---- guest ROM patch ------------------------------------------------------ */
-
-static int apply_patch(void) {
+/* Read-only retail seam guard: the game ROM is never patched. */
+static int verify_guest_rom(void) {
   if (!g_snes || !g_snes->cart || !g_snes->cart->rom ||
-      g_snes->cart->romSize < kRomShapeTable + kRomShapeTablePatchBytes) {
-    set_status(kArwing64_PatchFailed, "guest ROM not loaded");
+      g_snes->cart->romSize < kRomShapeTable + kRomShapeTablePatchBytes ||
+      memcmp(g_snes->cart->rom + kRomShapeTable, kShapeTableExpected,
+             kRomShapeTablePatchBytes)) {
+    g_rt.stats.retail_mismatches++;
+    set_status(kArwing64_RetailMismatch, "retail player table does not match");
     return 0;
   }
-  uint8_t *target = g_snes->cart->rom + kRomShapeTable;
-  if (g_rt.patch.applied && g_rt.patch.target == target) {
-    if (guarded_patch_verify(&g_rt.patch) == kGuardedPatch_Ok) return 1;
-    /* Someone changed the bytes underneath (e.g. a reload); rebuild. */
-    g_rt.patch.applied = 0;
-  }
-  if (g_rt.patch_registered) {
-    guarded_patch_unregister(&g_rt.patch);
-    g_rt.patch_registered = 0;
-  }
-  guarded_patch_init(&g_rt.patch, "arwing64:player-shape-table", target,
-                     kRomShapeTablePatchBytes, kShapeTableExpected,
-                     kShapeTableReplacement);
-  const GuardedPatchStatus st = guarded_patch_apply(&g_rt.patch);
-  if (st == kGuardedPatch_Ok || st == kGuardedPatch_AlreadyApplied) {
-    guarded_patch_register(&g_rt.patch);
-    g_rt.patch_registered = 1;
-    g_rt.stats.patch_applied = 1;
-    return 1;
-  }
-  g_rt.stats.patch_mismatches++;
-  set_status(kArwing64_PatchFailed, guarded_patch_status_name(st));
-  return 0;
-}
-
-static void revert_patch(void) {
-  if (g_rt.patch.applied) guarded_patch_revert(&g_rt.patch);
-  if (g_rt.patch_registered) {
-    guarded_patch_unregister(&g_rt.patch);
-    g_rt.patch_registered = 0;
-  }
-  g_rt.stats.patch_applied = 0;
+  return 1;
 }
 
 /* ---- lifecycle ------------------------------------------------------------ */
@@ -367,7 +333,7 @@ void arwing64_refresh(void) {
   if (strcmp(g_rt.configured_rom, g_config.arwing64_rom_path) ||
       g_rt.configured_sfx != (g_config.arwing64_sfx ? 1 : 0)) {
     arwing64_audio_refresh(NULL, 0);
-    revert_patch();
+    arwing64_picture_reset();
     host_mesh_free(g_rt.mesh); g_rt.mesh = NULL;
     g_rt.stats.cache_path[0] = 0;
     snprintf(g_rt.configured_rom, sizeof(g_rt.configured_rom), "%s", g_config.arwing64_rom_path);
@@ -375,7 +341,7 @@ void arwing64_refresh(void) {
   }
   if (!enabled) {
     arwing64_audio_refresh(NULL, 0);
-    revert_patch();
+    arwing64_picture_reset();
     if (g_rt.mesh) {
       host_mesh_free(g_rt.mesh);
       g_rt.mesh = NULL;
@@ -394,7 +360,7 @@ void arwing64_refresh(void) {
     }
     if (!build_mesh_from_rom(g_config.arwing64_rom_path)) return;
   }
-  if (!apply_patch()) { arwing64_audio_refresh(NULL, 0); return; }
+  if (!verify_guest_rom()) { arwing64_audio_refresh(NULL, 0); return; }
   set_status(kArwing64_Active, NULL);
   g_rt.refreshed_for_enabled = 1;
   {
@@ -409,7 +375,7 @@ void arwing64_refresh(void) {
       if (cut) *cut = 0;
     }
     if (!arwing64_audio_refresh(dir, g_config.arwing64_sfx ? 1 : 0)) {
-      revert_patch();
+      arwing64_picture_reset();
       set_status(kArwing64_CacheInvalid, "cannot activate complete SF64 audio set");
     }
   }
@@ -421,7 +387,7 @@ int arwing64_active(void) {
   if (g_config.arwing64_enabled && !g_rt.refreshed_for_enabled) arwing64_refresh();
   if (!g_config.arwing64_enabled && g_rt.mesh) arwing64_refresh();
   return g_rt.stats.status == kArwing64_Active && g_rt.mesh != NULL &&
-         g_rt.patch.applied;
+         g_snes != NULL;
 }
 
 int arwing64_wants_enhanced_frame(void) {
@@ -686,12 +652,12 @@ int arwing64_debug_command(const char *args, Arwing64SendLine send_line) {
   const Arwing64Stats *s = &g_rt.stats;
   if (!args || !*args || strcmp(args, "status") == 0) {
     snprintf(line, sizeof(line),
-             "arwing64 status=%s detail=%s enabled=%d patch=%d frames=%u "
+             "arwing64 status=%s detail=%s enabled=%d guest_patch=0 frames=%u "
              "cockpit_skips=%u last_pixels=%u last_tris=%u bbox=%d,%d..%d,%d "
              "glow=%u shield=%u",
              arwing64_status_name(s->status),
              s->status_detail ? s->status_detail : "-",
-             g_config.arwing64_enabled ? 1 : 0, s->patch_applied,
+             g_config.arwing64_enabled ? 1 : 0,
              s->frames_drawn, s->frames_skipped_cockpit, s->last_pixels,
              s->last_triangles, s->last_bbox[0], s->last_bbox[1],
              s->last_bbox[2], s->last_bbox[3], s->glow_draws, s->shield_draws);
@@ -723,13 +689,8 @@ int arwing64_debug_command(const char *args, Arwing64SendLine send_line) {
     send_line(line);
     return 1;
   }
-  if (strcmp(args, "patch") == 0) {
-    snprintf(line, sizeof(line),
-             "arwing64 patch applied=%d status=%s apply_count=%u mismatches=%u",
-             g_rt.patch.applied,
-             guarded_patch_status_name(g_rt.patch.last_status),
-             g_rt.patch.apply_count, g_rt.patch.mismatch_count);
-    send_line(line);
+  if (strcmp(args, "patch") == 0 || strcmp(args, "picture") == 0) {
+    arwing64_picture_debug(send_line);
     return 1;
   }
   if (strcmp(args, "audio") == 0) {

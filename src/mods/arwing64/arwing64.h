@@ -1,8 +1,8 @@
 /* Arwing64: draw the Star Fox 64 Arwing in place of the Super FX player ship.
  *
  * Runtime side of the mod. Owns the owner-asset cache (extracted once from
- * the user's Star Fox 64 ROM, hash-verified on every load), the guarded ROM
- * patch that makes the guest draw an invisible player shape, the guest-state
+ * the user's Star Fox 64 ROM, hash-verified on every load), the private
+ * presentation replay that leaves guest memory unchanged, the guest-state
  * readers (wing damage, boost, brake, barrel roll, view mode, damage flash),
  * and the host_mesh draw of the ship at the player's slot in the Star Fox
  * Enhanced draw order. Everything fails closed: if the cache or ROM is
@@ -25,7 +25,7 @@ typedef enum Arwing64Status {
   kArwing64_RomInvalid,     /* ROM failed identity/size checks */
   kArwing64_ExtractFailed,  /* decoder error */
   kArwing64_CacheInvalid,   /* cache present but hash mismatch and re-extract failed */
-  kArwing64_PatchFailed,    /* guest ROM bytes unexpected; ship left stock */
+  kArwing64_RetailMismatch, /* guest ROM bytes unexpected; ship left stock */
   kArwing64_Active,
 } Arwing64Status;
 
@@ -64,17 +64,16 @@ typedef struct Arwing64Stats {
   int last_bbox[4];
   uint32_t glow_draws;
   uint32_t shield_draws;
-  uint32_t patch_mismatches;
-  int patch_applied;
+  uint32_t retail_mismatches;
   char cache_path[512];
   char blob_sha256[65];
 } Arwing64Stats;
 
 /* Called at startup and whenever the feature toggles; idempotent. Performs
- * cache load / extraction and applies or reverts the guest ROM patch. */
+ * cache load / extraction and validates the read-only retail seams. */
 void arwing64_refresh(void);
 
-/* True when the mesh is loaded and the guest patch is applied. */
+/* True when the mesh, optional audio and retail seams are validated. */
 int arwing64_active(void);
 
 /* True when the mod wants the enhanced frame path to run even though the

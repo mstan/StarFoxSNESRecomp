@@ -60,11 +60,11 @@ class SeamDocumentTests(unittest.TestCase):
                        "$03:B7F9", "$35", "$32", "$33"]:
             self.assertIn(needle, doc, needle)
 
-    def test_patch_bytes_match_seam_doc(self):
+    def test_read_only_retail_guard_matches_seam_doc(self):
         src = read_text(os.path.join(ROOT, "src", "mods", "arwing64", "arwing64.c"))
         self.assertIn("kRomShapeTable = 0x300d5", src)
         self.assertIn("0x20, 0xd3, 0xac, 0xd3, 0x74, 0xd3", src)
-        self.assertIn("0xcc, 0xd2, 0xcc, 0xd2, 0xcc, 0xd2", src)
+        self.assertNotIn("guarded_patch_apply", src)
 
     def test_config_surface(self):
         cfg = read_text(os.path.join(ROOT, "src", "config.c"))

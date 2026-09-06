@@ -14,6 +14,7 @@
 #include "snes/superfx.h"
 #include "starfox_enhanced_renderer.h"
 #include "mods/arwing64/arwing64.h"
+#include "mods/arwing64/arwing64_picture.h"
 
 uint16 counter_global_frames;
 
@@ -514,12 +515,7 @@ static void service_irq(void) {
 }
 
 void StarFoxRunFrame(void) {
-  SuperFx *const superfx = g_snes->cart->superfx;
-  if (superfx) {
-    superfx_set_enhancement_mode(superfx, kSuperFxEnhancement_None);
-    superfx_set_widescreen(superfx, 0, 0, 0, 0, 0, 0);
-    superfx_set_widescreen_replay_zero_words(superfx, NULL, 0);
-  }
+  arwing64_picture_pre_frame();
 
   if (!s_started) {
     cpu_state_init(&g_cpu, g_ram);
@@ -576,6 +572,7 @@ void StarFoxRunFrame(void) {
 }
 
 void StarFoxDrawPpuFrame(void) {
+  arwing64_picture_begin_draw();
   SimpleHdma hdma[8];
   uint16_t saved_crosshair_palette[16];
   const bool restore_crosshair_palette =
