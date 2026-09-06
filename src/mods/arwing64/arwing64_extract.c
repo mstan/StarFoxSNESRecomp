@@ -71,6 +71,9 @@ int arwing64_extract_mesh(const uint8_t *rom_image, size_t rom_size,
                HOST_MESH_MAT_CULL_BACK | HOST_MESH_MAT_BILINEAR;
   memset(ship.prim, 0xff, 4);
   memset(ship.env, 0xff, 4);
+  /* SETUPDL_29 uses TEXEL0 alpha, not SHADE alpha. Several wing/flap
+   * vertices have alpha zero in the ROM; that does not hide them on N64. */
+  ship.ignore_vertex_alpha = 1;
 
   Sf64GfxContext ctx;
   sf64_gfx_init(&ctx, segments, 2, builder, &ship);

@@ -291,6 +291,7 @@ static int emit_triangle(DecodeState *st, int i0, int i1, int i2) {
     v[k].ny = (int8_t)st->vtx[i].cn[1];
     v[k].nz = (int8_t)st->vtx[i].cn[2];
     memcpy(v[k].color, st->vtx[i].cn, 4);
+    if (ctx->material.ignore_vertex_alpha) v[k].color[3] = 255;
   }
   if (!host_mesh_builder_add_triangle(ctx->builder, (uint32_t)material, v)) {
     ctx->error = "sf64_gfx: triangle append failed";

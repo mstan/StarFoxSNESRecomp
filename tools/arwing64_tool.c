@@ -270,6 +270,8 @@ int main(int argc, char **argv) {
   }
   const int pose = host_mesh_find_pose(mesh, pose_name);
   if (pose < 0) fprintf(stderr, "warning: pose %s not found\n", pose_name);
+  else printf("pose %s index=%d wing_z=%.3f,%.3f\n", pose_name, pose,
+              mesh->poses[pose].rot_deg[12].z, mesh->poses[pose].rot_deg[13].z);
   Override ov;
   ov.broken_a = !strcmp(break_mode, "a") || !strcmp(break_mode, "both");
   ov.broken_b = !strcmp(break_mode, "b") || !strcmp(break_mode, "both");

@@ -2,12 +2,18 @@
 
 Arwing64 replaces the player presentation with the Star Fox 64 Arwing, wing
 damage variants, engine glow, roll shield, player lasers, and ship sound effects. It works with
-Authentic 4:3 and Enhanced widescreen. It is an opt-in development preview:
-automated gameplay-state checks pass and owner playtesting is pending.
-Do not treat this branch as release-approved.
+Authentic 4:3 and Enhanced widescreen. It is an opt-in development preview.
+The owner approved the ship presentation on September 5, 2026; broader route
+and release testing is still needed.
 
 The controls screen's ship demonstration also uses the SF64 Arwing. Its
 controller diagram, labels and controls remain the SNES game's originals.
+
+The wings start in SF64's fully opened flight pose. SNES has no matching SF64
+wing-opening event, so this uses the original open pose directly, including in
+the controls preview. Wing damage still replaces the appropriate wing. Mesh
+cache version 3 also fixes wing opacity: the original ship material uses texture
+alpha, and its unused zero vertex alpha must not hide the wings and flaps.
 
 ## Enable it
 
@@ -76,7 +82,9 @@ test compiles the decomp's actual `tools/aifc_decode.c` locally and compares
 17 decoded instruments byte for byte; it also checks WAVs, manifest hashes,
 loop markers and extraction repeatability. Synthetic tests exercise the cue
 protocol, host mixer and lifecycle without an owner ROM. Mesh tests compare
-the per-display-list triangle census with Torch's extracted C output.
+the per-display-list triangle census with Torch's extracted C output. A rendered
+silhouette test also verifies that opening the wings visibly increases their
+span; matching triangle counts alone cannot detect transparent geometry.
 
 For local diagnostics, create an output directory and run:
 

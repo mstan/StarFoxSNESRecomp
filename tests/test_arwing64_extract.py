@@ -112,6 +112,25 @@ class DifferentialTests(unittest.TestCase):
         self.assertGreaterEqual(self.stats["textures"], 15)
         self.assertTrue(os.path.getsize(os.path.join(self.out_dir, "arwing64.bin")) > 100000)
 
+    def test_open_wings_are_visible_and_wider_than_closed(self):
+        # A triangle census cannot catch fully transparent wings. Check the
+        # rasterised silhouette of the original poses, with both wings intact.
+        widths = []
+        for pose in ("wings_closed", "wings_open"):
+            with tempfile.TemporaryDirectory(prefix="arwing64_pose_") as out:
+                run = subprocess.run(
+                    [os.environ["ARWING64_TOOL"], os.environ["SF64_ROM"],
+                     out, "--pose", pose, "--break", "none"], check=True,
+                    capture_output=True, text=True)
+                rear = re.search(
+                    r"preview [^\n]*preview_rear.png: pixels=(\d+).*"
+                    r"bbox=(-?\d+),(-?\d+)\.\.(-?\d+),(-?\d+)", run.stdout)
+                self.assertIsNotNone(rear, run.stdout)
+                self.assertGreater(int(rear[1]), 3000)
+                widths.append(int(rear[4]) - int(rear[2]))
+        self.assertGreater(widths[1], widths[0] * 1.5,
+                           "expanded wing geometry must change the visible silhouette")
+
 
 if __name__ == "__main__":
     unittest.main()

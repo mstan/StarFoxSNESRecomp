@@ -168,8 +168,8 @@ static int cache_paths(const char *rom_sha1, char *blob_path, size_t n,
   char dir[512];
   if (!snesrecomp_exe_dir_path("arwing64_cache", dir, sizeof(dir))) return 0;
   arwing64_mkdir(dir);
-  snprintf(blob_path, n, "%s/arwing64_%.12s_v2.bin", dir, rom_sha1);
-  snprintf(sidecar_path, m, "%s/arwing64_%.12s_v2.bin.sha256", dir, rom_sha1);
+  snprintf(blob_path, n, "%s/arwing64_%.12s_v3.bin", dir, rom_sha1);
+  snprintf(sidecar_path, m, "%s/arwing64_%.12s_v3.bin.sha256", dir, rom_sha1);
   return 1;
 }
 
@@ -187,9 +187,10 @@ static HostMesh *load_blob_verified(const uint8_t *blob, size_t size,
     return NULL;
   }
   if (host_mesh_find_display_list(mesh, "aLaserShotGreenDL") < 0 ||
-      host_mesh_find_display_list(mesh, "aLaserShotBlueDL") < 0) {
+      host_mesh_find_display_list(mesh, "aLaserShotBlueDL") < 0 ||
+      host_mesh_find_pose(mesh, "wings_open") < 0) {
     host_mesh_free(mesh);
-    set_status(kArwing64_CacheInvalid, "mesh cache is missing laser assets");
+    set_status(kArwing64_CacheInvalid, "mesh cache is missing laser or wing-pose assets");
     return NULL;
   }
   snprintf(g_rt.stats.blob_sha256, sizeof(g_rt.stats.blob_sha256), "%s", hex);
@@ -611,9 +612,10 @@ uint32_t arwing64_draw_player(uint8_t *pixels, size_t pitch, int width,
   HostMeshDrawParams p;
   host_mesh_draw_params_init(&p);
   p.mesh = g_rt.mesh;
-  /* Wing pose: planets fly half open, space closed, the SNES game has no
-   * all-range mode. */
-  p.pose = (g->gamemode & 1) ? g_rt.pose_closed : g_rt.pose_half_open;
+  /* Deploy the original SF64 open-wing pose before drawing. SNES has no
+   * SF64 wingPosition=2 transition, so waiting for one left this pose unused.
+   * This presentation enhancement deliberately keeps the wings expanded. */
+  p.pose = g_rt.pose_open;
   host_mesh_matrix_compose(p.model_to_camera, rot, kModelScale, translation);
   p.projection.project = project_starfox;
   p.projection.ctx = &proj;

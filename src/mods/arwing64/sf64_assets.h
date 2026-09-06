@@ -30,6 +30,7 @@ typedef struct Sf64MaterialTemplate {
   uint32_t flags;   /* HOST_MESH_MAT_* excluding TEXTURE (added when bound) */
   uint8_t prim[4];
   uint8_t env[4];
+  uint8_t ignore_vertex_alpha; /* e.g. MODULATEIDECALA uses texture alpha */
 } Sf64MaterialTemplate;
 
 typedef struct Sf64GfxStats {
