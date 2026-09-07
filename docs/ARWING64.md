@@ -114,9 +114,19 @@ For Windows playtests with logs, use direct file redirection through the helper
 below. `Start-Process -RedirectStandardError` caused blocking log writes and
 long startup stalls on the owner's machine. Run this from the game repository,
 using a native Python executable; the helper preserves the working directory.
+Use a normal build with `SNESRECOMP_ENABLE_TRACE=OFF` for owner playtests.
+Keep the tracing-enabled `build-arwing` separate for deliberate TCP/debug
+investigations; its CPU-history buffers and repeated frame logs are unnecessary
+for playing. The normal build keeps the same renderer, Arwing, audio and quality.
+
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;' + $env:Path
+& C:\msys64\mingw64\bin\cmake.exe -S . -B build-play -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSNESRECOMP_ENABLE_TRACE=OFF -DCMAKE_C_COMPILER=C:/msys64/mingw64/bin/cc.exe -DCMAKE_CXX_COMPILER=C:/msys64/mingw64/bin/c++.exe
+& C:\msys64\mingw64\bin\cmake.exe --build build-play --target StarFoxSNESRecomp -j 4
+```
 
 ```text
-python tools/launch_playtest.py --log-prefix _arwing_validation/playtest build-arwing/StarFoxSNESRecomp.exe --config _arwing_validation/owner_playtest.ini --launcher starfox.sfc
+python tools/launch_playtest.py --log-prefix _arwing_validation/playtest build-play/StarFoxSNESRecomp.exe --config _arwing_validation/owner_playtest.ini --launcher starfox.sfc
 ```
 
 The GUI remains open after the helper exits. Add `--wait --hidden` before the
