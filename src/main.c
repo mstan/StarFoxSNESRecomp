@@ -525,30 +525,60 @@ static uint16_t mmx_runner_to_snes_joypad(uint16_t r) {
 }
 #endif
 
+static StarFoxPresentationClock g_presentation_clock;
+static uint64 g_presentation_deadline;
+static unsigned g_presentation_slot, g_presentation_slots;
+
+static void WaitForPresentation(uint64 deadline) {
+  const uint64 frequency = SDL_GetPerformanceFrequency();
+  for (;;) {
+    const uint64 now = SDL_GetPerformanceCounter();
+    if (now >= deadline) return;
+    const uint64 ms = (deadline - now) * 1000 / frequency;
+    // Sleep most of the wait, then yield through the fractional millisecond.
+    // Rounding every 8.33 ms slot to an integer creates visible uneven gaps.
+    SDL_Delay(ms > 1 ? (uint32)(ms - 1) : 0);
+  }
+}
+
+static void PresentCachedSlots(unsigned through) {
+  while (g_presentation_slot < g_presentation_slots &&
+         g_presentation_slot <= through) {
+    const uint64 deadline = StarFoxPresentationSlot(g_presentation_deadline,
+        SDL_GetPerformanceFrequency(), g_presentation_slot++, g_presentation_slots);
+    WaitForPresentation(deadline);
+    PresentationDebugPresentCurrent();
+  }
+}
+
 static void DrawPpuFrameWithPerf(void) {
   const int render_scale = 1;
-  uint8 *pixel_buffer = 0;
-  int pitch = 0;
-
-  g_renderer_funcs.BeginDraw(g_snes_width * render_scale,
-                             g_snes_height * render_scale,
-                             &pixel_buffer, &pitch);
-  if (!pixel_buffer || pitch <= 0)
-    return;
-  uint8 *target_pixels = pixel_buffer;
-  const int target_pitch = pitch;
-  pixel_buffer = g_presentation_pixels;
-  pitch = g_snes_width * 4;
+  uint8 *pixel_buffer = g_presentation_pixels;
+  int pitch = g_snes_width * 4;
   // SDL's locked texture can be write-combined memory. Software rendering
   // and history capture read pixels repeatedly, so keep that work in CPU RAM.
   RtlDrawPpuFrame(pixel_buffer, pitch, g_ppu_render_flags);
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
 
+  // Finish cached presentations before replacing their history entry. CPU
+  // rendering runs between display slots; no SDL texture stays locked across
+  // a cached presentation.
+  if (g_presentation_deadline)
+    PresentCachedSlots(g_presentation_slots);
+  uint8 *target_pixels = NULL;
+  int target_pitch = 0;
+  g_renderer_funcs.BeginDraw(g_snes_width * render_scale,
+                             g_snes_height * render_scale,
+                             &target_pixels, &target_pitch);
+  if (!target_pixels || target_pitch <= 0)
+    return;
   PresentationHistoryRecord(pixel_buffer, pitch);
   for (int y = 0; y < g_snes_height; y++)
     memcpy(target_pixels + (size_t)y * target_pitch,
            pixel_buffer + (size_t)y * pitch, (size_t)pitch);
+  if (g_presentation_deadline)
+    WaitForPresentation(g_presentation_deadline);
   g_renderer_funcs.EndDraw();
   NoteCompletedPresentation();
 }
@@ -572,14 +602,6 @@ static uint32 ExtraPresentationsAfterFrame(uint32 frame) {
   const uint32 previous = ((frame - 1u) * fps) / 60u;
   const uint32 current = (frame * fps) / 60u;
   return current > previous ? current - previous - 1u : 0;
-}
-
-static void DelayForDuplicatePresentation(uint64 frame_started, unsigned duplicate) {
-  const uint32 delay = StarFoxPresentationDuplicateDelayMs(
-      SDL_GetPerformanceCounter() - frame_started, SDL_GetPerformanceFrequency(),
-      g_config.presentation_fps, duplicate);
-  if (delay)
-    SDL_Delay(delay);
 }
 
 static void DrawPpuFrameWithoutPresent(void) {
@@ -1599,7 +1621,15 @@ error_reading:;
     inputs |= debug_server_get_controller_inputs();
     uint32 frame_inputs = inputs | GetActiveControllers() |
                           debug_server_get_controller_active_mask();
-    const uint64 presentation_frame_started = SDL_GetPerformanceCounter();
+    const bool paced_presentation = g_config.presentation_fps > 60 &&
+        !g_config.disable_frame_delay && !g_turbo;
+    g_presentation_deadline = paced_presentation
+        ? StarFoxPresentationNextDeadline(&g_presentation_clock,
+            SDL_GetPerformanceCounter(), SDL_GetPerformanceFrequency()) : 0;
+    if (!paced_presentation)
+      memset(&g_presentation_clock, 0, sizeof(g_presentation_clock));
+    g_presentation_slots = ExtraPresentationsAfterFrame(frameCtr + 1) + 1;
+    g_presentation_slot = 1;
     StarFoxEnhancedPreFrame(frame_inputs);
     RtlRunFrame(frame_inputs);
     StarFoxEnhancedPostFrame(frame_inputs);
@@ -1636,12 +1666,15 @@ error_reading:;
 
     if (!g_snes->disableRender) {
       if (ShouldPresentFrame(frameCtr)) {
+        // At 120 Hz, simulate first, display the retained picture at the
+        // halfway point, then render and present the new picture at 60 Hz.
+        // The previous loop presented both copies together after rendering.
+        if (paced_presentation)
+          PresentCachedSlots(g_presentation_slots / 2);
         DrawPpuFrameWithPerf();
-        const uint32 duplicates = ExtraPresentationsAfterFrame(frameCtr);
-        for (uint32 duplicate = 1; duplicate <= duplicates; duplicate++) {
-          DelayForDuplicatePresentation(presentation_frame_started, duplicate);
-          PresentationDebugPresentCurrent();
-        }
+        if (!paced_presentation)
+          for (uint32 duplicate = 1; duplicate < g_presentation_slots; duplicate++)
+            PresentationDebugPresentCurrent();
       } else {
         DrawPpuFrameWithoutPresent();
       }
@@ -1650,7 +1683,9 @@ error_reading:;
     // if vsync isn't working, delay manually
     curTick = SDL_GetTicks();
 
-    if (!g_snes->disableRender && !g_config.disable_frame_delay) {
+    if (paced_presentation) {
+      lastTick = curTick;
+    } else if (!g_snes->disableRender && !g_config.disable_frame_delay) {
       static const uint8 delays[3] = { 17, 17, 16 }; // 60 fps
       lastTick += delays[frameCtr % 3];
 

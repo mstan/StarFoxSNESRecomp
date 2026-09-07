@@ -196,11 +196,25 @@ unsigned StarFoxPresentationBrightness(int line) {
   return line >= 0 && line < 224 ? g_presentation_brightness[line] : 0;
 }
 
-unsigned StarFoxPresentationDuplicateDelayMs(uint64_t elapsed, uint64_t frequency,
-                                             unsigned fps, unsigned duplicate) {
-  if (fps <= 60 || !frequency || !duplicate) return 0;
-  const uint64_t deadline = frequency * duplicate / fps;
-  // Rendering and simulation already spent part of this frame's budget.
-  // A late duplicate must not add another full interval and slow gameplay.
-  return elapsed >= deadline ? 0 : (unsigned)((deadline - elapsed) * 1000 / frequency);
+uint64_t StarFoxPresentationNextDeadline(StarFoxPresentationClock *clock,
+                                        uint64_t now, uint64_t frequency) {
+  if (!frequency) return now;
+  // Re-anchor after a pause/debug stop. Ordinary late frames keep their
+  // deadlines so a brief scheduling delay does not permanently slow the game.
+  if (!clock->frame || now < clock->epoch ||
+      (now > clock->deadline && now - clock->deadline > frequency / 4)) {
+    clock->epoch = now;
+    clock->frame = 0;
+  }
+  ++clock->frame;
+  clock->deadline = clock->epoch + (clock->frame / 60) * frequency +
+                    (clock->frame % 60) * frequency / 60;
+  return clock->deadline;
+}
+
+uint64_t StarFoxPresentationSlot(uint64_t deadline, uint64_t frequency,
+                                 unsigned slot, unsigned count) {
+  if (!count || slot >= count) return deadline;
+  const uint64_t before = frequency * (count - slot) / (60u * count);
+  return before < deadline ? deadline - before : 0;
 }

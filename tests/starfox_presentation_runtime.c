@@ -25,15 +25,26 @@ static void scanout(Ppu *ppu, int mode, int brightness) {
 }
 
 int main(void) {
-  // At 120 Hz, 12 ms of work has already passed the 8.33 ms duplicate slot.
-  // Waiting another 8 ms would push a viable 60 Hz game frame past 20 ms.
-  assert(StarFoxPresentationDuplicateDelayMs(12000, 1000000, 120, 1) == 0);
-  assert(StarFoxPresentationDuplicateDelayMs(3000, 1000000, 120, 1) == 5);
-  assert(StarFoxPresentationDuplicateDelayMs(8000, 1000000, 120, 1) == 0);
-  assert(StarFoxPresentationDuplicateDelayMs(2000, 1000000, 240, 1) == 2);
-  assert(StarFoxPresentationDuplicateDelayMs(9000, 1000000, 240, 3) == 3);
-  assert(StarFoxPresentationDuplicateDelayMs(0, 1000000, 60, 1) == 0);
-  assert(StarFoxPresentationDuplicateDelayMs(0, 0, 120, 1) == 0);
+  StarFoxPresentationClock clock = {0};
+  const uint64_t frequency = 1000000;
+  uint64_t deadline = StarFoxPresentationNextDeadline(&clock, 1000000, frequency);
+  assert(deadline == 1016666);
+  assert(StarFoxPresentationSlot(deadline, frequency, 1, 2) == 1008333);
+  assert(StarFoxPresentationSlot(deadline, frequency, 2, 2) == deadline);
+  // A long simulation may miss the duplicate, but does not shift the primary
+  // deadline or add a full interval after the work.
+  deadline = StarFoxPresentationNextDeadline(&clock, 1020000, frequency);
+  assert(deadline == 1033333);
+  assert(StarFoxPresentationSlot(deadline, frequency, 1, 4) == 1020833);
+  assert(StarFoxPresentationSlot(deadline, frequency, 3, 4) == 1029167);
+  for (unsigned i = 3; i <= 3600; i++)
+    deadline = StarFoxPresentationNextDeadline(&clock, deadline, frequency);
+  assert(deadline == 61000000); // No millisecond rounding drift over a minute.
+  deadline = StarFoxPresentationNextDeadline(&clock, 62000000, frequency);
+  assert(deadline == 62016666); // Pause rebases; no burst of catch-up frames.
+  deadline = StarFoxPresentationNextDeadline(&clock, 42, frequency);
+  assert(deadline == 16708); // Defensive clock rewind handling.
+  assert(StarFoxPresentationNextDeadline(&clock, 55, 0) == 55);
   static Ppu ppu;
   static uint8_t stock[256 * 224 * 4], output[520 * 224 * 4];
   g_ppu = &ppu;

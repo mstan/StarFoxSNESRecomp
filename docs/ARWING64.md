@@ -194,6 +194,15 @@ An isolated save/load probe recovered the picture and audio, but exact resumed
 CPU/scheduler fidelity remains an audit item (`beads-8wg.8.4`). This visual check
 does not establish that the entire save-state resumes identically.
 
+The September 7 presentation-pacing check used 16:9, 120 FPS, 4x supersampling
+and audio enabled, with scripted input and no screenshot capture during timing.
+Across 3,200 host presentations, gaps above 12 ms fell from 1,001 to 2; the
+95th-percentile gap fell from 21.07 ms to 9.74 ms. These measure host submission
+timing, not physical monitor scanout. A separate before/after replay matched
+all 38 captured images and full WRAM, GSU RAM, VRAM and exposed GSU state at
+five checkpoints through frame 7350. The clock correction is opt-in above
+60 FPS; it does not alter guest timing or lower rendering quality.
+
 ## Credits
 
 * [sonicdcer/sf64](https://gitlab.com/sonicdcer/sf64), CC0: source semantics

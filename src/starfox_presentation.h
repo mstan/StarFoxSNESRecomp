@@ -21,8 +21,14 @@ void StarFoxPresentationApplyWorldEffects(uint8_t *pixels, size_t pitch,
                                          int width, int height);
 void StarFoxPresentationApplyBrightness(const RtlEnhancedRendererFrame *frame,
                                        int stock_center);
-unsigned StarFoxPresentationDuplicateDelayMs(uint64_t elapsed, uint64_t frequency,
-                                             unsigned fps, unsigned duplicate);
+/* Host-only cadence for opt-in presentation rates above 60. */
+typedef struct StarFoxPresentationClock {
+  uint64_t epoch, frame, deadline;
+} StarFoxPresentationClock;
+uint64_t StarFoxPresentationNextDeadline(StarFoxPresentationClock *clock,
+                                        uint64_t now, uint64_t frequency);
+uint64_t StarFoxPresentationSlot(uint64_t deadline, uint64_t frequency,
+                                 unsigned slot, unsigned count);
 #ifdef __cplusplus
 }
 #endif
