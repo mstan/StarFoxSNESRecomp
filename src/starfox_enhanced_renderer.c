@@ -41,6 +41,7 @@ enum {
   kRamMsgCount2 = 0x189e,
   kRamShadowHeight = 0x1957,
   kRamScenePreset = 0x1741,
+  kRamPointEffect = 0x16f9,
   kScenePresetScramble = 0x0003,
   kGsuFacePtr = 0x0018,
   kGsuVanishX = 0x0034,
@@ -141,6 +142,7 @@ typedef struct NativeSourceFrameSnapshot {
   int valid;
   int frame;
   uint8_t game_frame;
+  int16_t point_effect;
   int16_t view_x;
   int16_t view_y;
   int16_t view_z;
@@ -919,6 +921,7 @@ void StarFoxEnhancedLatchSourceFrame(void) {
   extern int snes_frame_counter;
   snapshot.frame = snes_frame_counter;
   snapshot.game_frame = (uint8_t)(ram_byte(kRamGameFrame) & 0x7f);
+  snapshot.point_effect = ram_i16(kRamPointEffect);
   snapshot.view_x = ram_i16(kRamViewPosX);
   snapshot.view_y = ram_i16(kRamViewPosY);
   snapshot.view_z = ram_i16(kRamViewPosZ);
@@ -1250,6 +1253,30 @@ draw_source_snapshot_shapes(uint8_t *pixels, size_t pitch, int width,
     renderer_stats->unsupported_invalid = g_source_snapshot.unsupported_invalid;
   }
 
+  /* Ground points precede shadows and objects, as in the Super FX draw pass.
+   * Latch the retail PointEffect with the source camera; a live flag could
+   * belong to a different scene during a transition. */
+  if (g_source_snapshot.point_effect > 0) {
+    int16_t camera[3] = {g_source_snapshot.view_x, g_source_snapshot.view_y,
+                         g_source_snapshot.view_z};
+    int16_t matrix[9];
+    memcpy(matrix, g_source_snapshot.view_matrix, sizeof(matrix));
+    const uint16_t alpha = source_interpolation_alpha_q8();
+    if (g_source_interpolation_valid && alpha < 256 &&
+        g_previous_source_snapshot.point_effect > 0) {
+      camera[0] = (int16_t)(uint16_t)(int32_t)interpolate_i16_f64(g_previous_source_snapshot.view_x,
+                                              camera[0], alpha);
+      camera[1] = (int16_t)(uint16_t)(int32_t)interpolate_i16_f64(g_previous_source_snapshot.view_y,
+                                              camera[1], alpha);
+      camera[2] = (int16_t)(uint16_t)(int32_t)interpolate_i16_f64(g_previous_source_snapshot.view_z,
+                                              camera[2], alpha);
+      StarFoxEnhancedInterpolateMatrixQ15(g_previous_source_snapshot.view_matrix,
+                                          matrix, alpha, matrix);
+    }
+    StarFoxEnhancedDrawGroundDots(pixels, pitch, width, height, camera, matrix,
+        g_source_snapshot.vanish_x + ws_extra, g_source_snapshot.vanish_y);
+  }
+
   /* Shadow pass */
   if ((g_source_snapshot.player_fly_mode & kPfmShadows) != 0) {
     for (unsigned i = 0; i < g_source_snapshot.draw_count; i++) {
@@ -1422,13 +1449,15 @@ static void debug_send_ppu(DebugServerGameSendLine send_line) {
   debug_sendf(send_line,
               "ppu mode=%u main=%x obsel=%x bg1_chr=%x bg1_scr=%x "
               "bg2_chr=%x bg2_scr=%x bg3_chr=%x bg3_scr=%x "
-              "bg2_vofs=%u bg2_hofs=%u brightness=%u dots=0",
+              "bg2_vofs=%u bg2_hofs=%u brightness=%u dots=%d",
               (unsigned)(ppu->bgmode & 0x07u),
               (unsigned)ppu->screenEnabled[0], (unsigned)ppu->obsel,
               (unsigned)((ppu->bgTileAdr >> 0) & 0xfu),
               (unsigned)ppu->bgXsc[0], (unsigned)((ppu->bgTileAdr >> 4) & 0xfu),
               (unsigned)ppu->bgXsc[1], (unsigned)((ppu->bgTileAdr >> 8) & 0xfu),
-              (unsigned)ppu->bgXsc[2], 0u, 0u, (unsigned)PPU_brightness(ppu));
+              (unsigned)ppu->bgXsc[2], (unsigned)ppu->vScroll[1],
+              (unsigned)ppu->hScroll[1], (unsigned)PPU_brightness(ppu),
+              (int)g_source_snapshot.point_effect);
 }
 
 static void debug_send_source_view(DebugServerGameSendLine send_line) {

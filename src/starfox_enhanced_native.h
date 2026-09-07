@@ -59,6 +59,9 @@ int StarFoxEnhancedDrawNativePpuLayers(uint8_t *pixels, size_t pitch, int width,
                                        int height, uint16_t widescreen_extra,
                                        int suppress_superfx_world_bg1,
                                        int anchor_edge_hud);
+unsigned StarFoxEnhancedDrawGroundDots(
+    uint8_t *pixels, size_t pitch, int width, int height,
+    const int16_t camera[3], const int16_t matrix[9], int origin_x, int origin_y);
 unsigned StarFoxEnhancedDrawGameplayHudSprites(uint8_t *pixels, size_t pitch,
                                                int width, int height,
                                                uint16_t widescreen_extra);

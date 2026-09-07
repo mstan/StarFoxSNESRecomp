@@ -1,4 +1,5 @@
 #include "starfox_enhanced_native.h"
+#include "starfox_ground_dots.hpp"
 
 extern "C" {
 #include "common_rtl.h"
@@ -720,6 +721,28 @@ extern "C" unsigned StarFoxEnhancedDrawCommsHud(
   } catch (const std::exception &) {
     return 0;
   }
+}
+
+extern "C" unsigned StarFoxEnhancedDrawGroundDots(
+    uint8_t *pixels, size_t pitch, int width, int height,
+    const int16_t camera[3], const int16_t matrix[9], int origin_x, int origin_y) {
+  const Ppu *ppu = StarFoxPresentationPpu();
+  if (!pixels || !ppu || !camera || !matrix || width <= 0 || height <= 0 ||
+      pitch < static_cast<size_t>(width) * 4u) return 0;
+  // Super FX palette 7, colour 14. World effects and brightness are applied
+  // once to the composed world, just like the native shapes drawn over it.
+  const uint16_t colour = ppu->cgram[7 * 16 + 14];
+  const uint8_t bgra[4] = {expand5(colour >> 10), expand5(colour >> 5),
+                           expand5(colour), 255};
+  starfox::simulation::MatrixQ15 view{};
+  std::copy_n(matrix, 9, view.begin());
+  unsigned count = 0;
+  StarFoxGroundDots({camera[0], camera[1], camera[2]}, view, origin_x, origin_y,
+      width, height, [&](int x, int y) {
+        std::memcpy(pixels + y * pitch + x * 4, bgra, 4);
+        ++count;
+      });
+  return count;
 }
 
 extern "C" void StarFoxEnhancedInterpolateMatrixQ15(const int16_t previous[9],

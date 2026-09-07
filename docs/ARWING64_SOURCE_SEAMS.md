@@ -176,3 +176,18 @@ Retail `$03:EA00` code stores the comms friend/message/count fields listed above
 compositor takes animated comms pixels from the published BG1 plane instead
 of interpreting that scratch pointer after the frame. BG2 scrolling now uses
 actual per-scanline PPU/HDMA values, avoiding modified-build WRAM table addresses.
+
+## Retail ground dots
+
+Retail USA Rev 2 stores `PointEffect` at WRAM `$16F9` (signed word), then copies
+it to GSU `$70:019E` at `$02:DA4C` before drawing the world. Positive selects the
+ground grid, zero disables points, and negative selects space stars. The
+modified-build `$177E` fallback is not the retail flag. The level commands
+`$16/$18/$1A` and background preset initialization update the retail word.
+
+The Enhanced host pass latches that flag with the camera and view matrix. Its
+15-by-15 grid uses 256-unit spacing, the source Q15 reciprocal projection,
+palette 7 colour 14, and the source vanishing point plus the widescreen offset.
+Nearby points keep the source's second pixel. Points precede shadows and
+objects and share their final world effects and scanline brightness. Rendering
+does not update the guest grid, camera, object list or memory.
