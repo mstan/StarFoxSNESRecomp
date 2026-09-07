@@ -65,7 +65,7 @@ Actual gameplay and owner-provided controls-preview captures; the ROMs and extra
 not included. See [adaptive widescreen behavior](docs/TRUE_WIDESCREEN.md) for
 the presentation rules and current validation limits.
 
-1. Download `StarFoxSNESRecomp-windows-0.0.1.zip` from
+1. Download `StarFoxSNESRecomp-windows-x64-v0.2.0.zip` from
    [Releases](../../releases) and extract it into a fresh folder.
 2. Run `StarFoxSNESRecomp.exe`.
 3. In the launcher, choose your legally obtained *Star Fox (USA), version 1.2*

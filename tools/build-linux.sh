@@ -61,8 +61,8 @@ PREBUILD_CMD=""
 POSTBUILD_CMD=""
 BOXART="recomp/launcher/boxart.tga"          # AppImage icon source (optional)
 EXTRA_PAYLOAD=()                             # repo-relative files -> usr/bin/
-# No release-owned mod catalog: widescreen is incomplete on this title and is
-# deliberately not shipped as a mod, so there is nothing to require here.
+# Enhanced widescreen and Arwing64 are built-in launcher features; no external
+# mod-package catalog is required.
 REQUIRED_MOD_MANIFESTS=()
 PROD_CMAKE_FLAGS=( -DSNESRECOMP_ENABLE_TRACE=OFF )
 DEBUG_CMAKE_FLAGS=( -DSNESRECOMP_ENABLE_TRACE=ON )
@@ -70,7 +70,8 @@ DEBUG_CMAKE_FLAGS=( -DSNESRECOMP_ENABLE_TRACE=ON )
 
 # Pinned AppImage tooling (same pins as the Mega Man X / Tomba Linux releases).
 LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-LINUXDEPLOY_SHA=421ca71d5c69ea97c6309276232990d43df1dcece0edfaa26bbf926ff96ed12e
+# Verified against GitHub release asset 538917371 on 2026-09-07.
+LINUXDEPLOY_SHA=36a2d7e274d12e1050d0e9ecfe11d339ed54720b2bec464c286d53f8b07f5c62
 APPIMAGETOOL_URL=https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
 APPIMAGETOOL_SHA=a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
 
@@ -243,6 +244,10 @@ $LINUXDEPLOY --appdir "$APPDIR" --executable "$BIN" \
 }
 echo "      staging launcher assets/ -> AppDir/usr/bin/assets"
 cp -r "$(dirname "$BIN")/assets" "$APPDIR/usr/bin/assets"
+cp "$REPO/README.md" "$APPDIR/usr/bin/README.md"
+mkdir -p "$APPDIR/usr/bin/docs/images"
+cp "$REPO"/docs/*.md "$APPDIR/usr/bin/docs/"
+cp "$REPO"/docs/images/*.png "$APPDIR/usr/bin/docs/images/"
 
 # Extra read-only payload (co-op IPS). Never user state.
 for rel in "${EXTRA_PAYLOAD[@]}"; do
@@ -322,6 +327,8 @@ fi
 exec "\$HERE/usr/bin/$EXE" "\$@"
 EOF
 chmod +x "$APPDIR/AppRun"
+
+python3 "$REPO/tools/check_release_payload.py" "$APPDIR"
 
 APP="$OUT/$RELEASE_SLUG-linux-$VERSION-x86_64.AppImage"
 rm -f "$APP"

@@ -87,8 +87,12 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
-New-Item -ItemType Directory -Path (Join-Path $stage 'docs') -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'docs\ARWING64.md') -Destination (Join-Path $stage 'docs')
+# Include the tracked feature docs and gallery so README links work offline.
+New-Item -ItemType Directory -Path (Join-Path $stage 'docs\images') -Force | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $root 'docs') -Filter '*.md' -File |
+  Copy-Item -Destination (Join-Path $stage 'docs')
+Get-ChildItem -LiteralPath (Join-Path $root 'docs\images') -Filter '*.png' -File |
+  Copy-Item -Destination (Join-Path $stage 'docs\images')
 Copy-Item -LiteralPath $assets -Destination $stage -Recurse
 # Release-owned mod catalog, when the build stages one. Ships as a nested
 # directory tree, which is exactly what made portable ZIP entry names matter
@@ -97,17 +101,13 @@ if (Test-Path -LiteralPath $mods) {
   Copy-Item -LiteralPath $mods -Destination $stage -Recurse
 }
 
-# keybinds.ini is auto-generated next to the exe on first run (regenerated if
-# deleted); ship whatever is currently sitting next to the built exe, if any.
-$kb = Join-Path $build 'keybinds.ini'
-if (Test-Path -LiteralPath $kb) {
-  Copy-Item -LiteralPath $kb -Destination $stage
-}
+# keybinds.ini is generated on first run. Do not ship a developer's bindings.
 
 # config.ini ships Widescreen = 0 regardless of the repo's working-tree value
 # (a dev may have flipped it locally while testing); the launcher toggles +
 # persists the player's choice at runtime.
 (Get-Content (Join-Path $root 'config.ini')) -replace '^Widescreen\s*=.*$', 'Widescreen = 0' `
+  -replace '^EnhancedRenderer\s*=.*$', 'EnhancedRenderer = 0' `
   -replace '^Arwing64\s*=.*$', 'Arwing64 = 0' `
   -replace '^Arwing64Rom\s*=.*$', 'Arwing64Rom =' |
   Out-File (Join-Path $stage 'config.ini') -Encoding ascii
