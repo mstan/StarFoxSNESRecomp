@@ -110,6 +110,20 @@ TCP debug builds expose `game arwing status`, `state`, `cache`, `picture`, and
 For scripted launches the SNES ROM must be the final positional argument or
 the launcher can wait for ROM selection.
 
+For Windows playtests with logs, use direct file redirection through the helper
+below. `Start-Process -RedirectStandardError` caused blocking log writes and
+long startup stalls on the owner's machine. Run this from the game repository,
+using a native Python executable; the helper preserves the working directory.
+
+```text
+python tools/launch_playtest.py --log-prefix _arwing_validation/playtest build-arwing/StarFoxSNESRecomp.exe --config _arwing_validation/owner_playtest.ini --launcher starfox.sfc
+```
+
+The GUI remains open after the helper exits. Add `--wait --hidden` before the
+executable for a scripted check; pass its normal `--script` and `--frames`
+arguments instead of `--launcher`. ROMs, configuration and game memory are
+unchanged by this helper.
+
 The engine runs the original CPU and Super FX work unchanged. An optional
 private replay removes the original ship and identified player bolts from a
 copy of the picture; private passes supply foreground coverage. The stock post-pass uses the camera
