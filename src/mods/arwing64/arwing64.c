@@ -58,9 +58,11 @@ enum {
 
 static const uint8_t kShapeTableExpected[kRomShapeTablePatchBytes] = {
     0x20, 0xd3, 0xac, 0xd3, 0x74, 0xd3};
-/* N64 model units -> SNES units: N64 wingspan 96 (x -48..48) to the Super FX
- * MYSHIP_4 wingspan 72 (x -36..36). */
-static const float kModelScale = 72.0f / 96.0f;
+/* Match the intact retail $00:D320 ship's 72-unit wingspan (header shift 0).
+ * SF64 wings_open spans 218.429 units AFTER skeleton placement. The 96-unit
+ * bind/closed bounds made the deployed ship 2.28 times too wide. Keep one
+ * uniform scale for the hull, glow attachment and roll shield. */
+static const float kModelScale = 72.0f / 218.428909f;
 /* Star Fox projection: screen = vanish + trunc(coord * 256 / z). */
 static const float kFocalLength = 256.0f;
 static const float kNearZ = 16.0f;

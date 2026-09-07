@@ -11,6 +11,11 @@ controller diagram, labels and controls remain the SNES game's originals.
 
 ![SF64 Arwing in the controls preview, captured by the owner](images/starfox-arwing64-controls.png)
 
+The ship is scaled uniformly to the original SNES ship's 72-unit wingspan.
+SF64's fully placed open skeleton spans 218.429 units; the smaller closed-pose
+bounds must not be used for sizing. The glow and roll shield use the same scale.
+The two ships have different proportions, so their length and silhouette differ.
+
 The wings start in SF64's fully opened flight pose. SNES has no matching SF64
 wing-opening event, so this uses the original open pose directly, including in
 the controls preview. Wing damage still replaces the appropriate wing. Mesh
@@ -87,6 +92,8 @@ protocol, host mixer and lifecycle without an owner ROM. Mesh tests compare
 the per-display-list triangle census with Torch's extracted C output. A rendered
 silhouette test also verifies that opening the wings visibly increases their
 span; matching triangle counts alone cannot detect transparent geometry.
+An independent skeleton-placement test also checks that the deployed model,
+after the game's scale is applied, matches the retail ship's 72-unit wingspan.
 
 For local diagnostics, create an output directory and run:
 
