@@ -16,6 +16,16 @@ SNES renderer. The stock path renders the authentic 256x224 picture. Wider
 Star Fox output belongs exclusively to the opt-in native renderer path behind
 `EnhancedRenderer`.
 
+## 21:9 gameplay capture
+
+![Corneria in Enhanced 21:9 with the original SNES Arwing](images/starfox-enhanced-21-9-corneria.png)
+
+Captured in game on September 7, 2026 with `Widescreen = 21:9`,
+`EnhancedRenderer = 1` and `Arwing64 = 0`. This shows the native widescreen
+renderer independently of the SF64 ship replacement, including the restored
+ground dots and HUD placement. See the separate
+[Arwing64 gameplay gallery](ARWING64.md#gameplay-gallery) for the mod.
+
 ## Contract
 
 - Stock renderer: 256x224, no Star Fox Super FX replay widening, no Mode 2

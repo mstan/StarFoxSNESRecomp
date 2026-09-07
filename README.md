@@ -54,7 +54,10 @@ playtest on September 5, 2026. See [Arwing64 setup and validation](docs/ARWING64
 are informed by sonicdcer/sf64 (CC0), with Torch (MIT) as a development oracle,
 on the Star Fox Enhanced presentation foundation credited above.
 
-![Star Fox 64 Arwing in Star Fox SNES, with Enhanced 21:9 presentation](docs/images/starfox-arwing64-widescreen.png)
+![Star Fox 64 Arwing flying over Corneria with the restored ground dots](docs/images/starfox-arwing64-flight.png)
+
+See the [Arwing64 gameplay gallery](docs/ARWING64.md#gameplay-gallery) for
+hangar launch, flight and combat captures from the current build.
 
 ![Star Fox 64 Arwing with expanded wings in the SNES controls preview](docs/images/starfox-arwing64-controls.png)
 
@@ -138,6 +141,12 @@ of the fixed aspect presets:
 - `16:9`
 - `21:9`
 - `32:9`
+
+![Enhanced 21:9 Corneria gameplay with the original SNES Arwing](docs/images/starfox-enhanced-21-9-corneria.png)
+
+This separate 21:9 capture uses the original SNES ship with Arwing64 disabled.
+The native renderer expands the world and positions the HUD at the outer edges;
+the ground dots are visible across the wider view.
 
 Disabling **Enhanced Widescreen** returns to Authentic 4:3. `DisplayMode`,
 `Widescreen`, and `EnhancedRenderer` remain accepted as configuration keys for

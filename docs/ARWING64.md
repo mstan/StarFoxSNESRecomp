@@ -22,6 +22,28 @@ the controls preview. Wing damage still replaces the appropriate wing. Mesh
 cache version 3 also fixes wing opacity: the original ship material uses texture
 alpha, and its unused zero vertex alpha must not hide the wings and flaps.
 
+## Gameplay gallery
+
+Captured in game on September 7, 2026, after the ground-dot fix. These use the
+16:9 Enhanced renderer, the SF64 model at the approved size, expanded wings and
+4x supersampling. The images preserve the rendered pixels without retouching.
+
+**Hangar launch:** a close view of the SF64 hull, wings and engine glow.
+
+![SF64 Arwing launching through the hangar](images/starfox-arwing64-launch.png)
+
+**Corneria flight:** the Arwing above its shadow and the restored ground dots.
+
+![SF64 Arwing flying over Corneria](images/starfox-arwing64-flight.png)
+
+**Corneria combat:** the replacement ship alongside the original level scenery,
+enemies and communications HUD.
+
+![SF64 Arwing during Corneria combat](images/starfox-arwing64-combat.png)
+
+For a separate view of the widescreen renderer with the original SNES ship,
+see the [21:9 screenshot](TRUE_WIDESCREEN.md#21-9-gameplay-capture).
+
 ## Enable it
 
 In the launcher's Mods page, choose **Star Fox 64 Arwing**, select your own
