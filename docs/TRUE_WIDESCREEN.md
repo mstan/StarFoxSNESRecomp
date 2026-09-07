@@ -154,6 +154,21 @@ renderers compose a wider framebuffer from game-specific assets/state.
 
 ## Validation Rule
 
+High presentation rates schedule duplicate pictures against the start of the
+game frame, accounting for time already spent simulating and rendering.
+Rendering and history capture use cached CPU memory; the completed picture is
+then copied to the display texture. This avoids slow CPU reads from SDL's
+locked texture memory without changing the rendered pixels or quality setting.
+
+September 6 performance check: separate before/after runs of the same route at
+16:9, 120 presentation FPS and Arwing64 supersample 4 measured frames 5800–6400
+at 44.0 versus 59.4 simulation FPS. Audio was disabled in both timed runs.
+History-copy cost fell from 2.704 ms to 0.009 ms per frame. All ten captures
+from 5500 through 6400 match pixel for pixel; full WRAM, GSU RAM, VRAM and
+exposed GSU state match at paused frame 5700. The timing unit tests cover
+exhausted frame budgets and 120/240 Hz duplicate deadlines. These measurements
+cover this route segment, not every scene or hardware configuration.
+
 The September 5 follow-up passed 26 game tests, including synthetic scanout
 cases for fades, blanking, sparse worlds, controls and stale source frames.
 Local 21:9 captures cover the boot route through gameplay frame 8500; a 16:9

@@ -21,6 +21,8 @@ void StarFoxPresentationApplyWorldEffects(uint8_t *pixels, size_t pitch,
                                          int width, int height);
 void StarFoxPresentationApplyBrightness(const RtlEnhancedRendererFrame *frame,
                                        int stock_center);
+unsigned StarFoxPresentationDuplicateDelayMs(uint64_t elapsed, uint64_t frequency,
+                                             unsigned fps, unsigned duplicate);
 #ifdef __cplusplus
 }
 #endif

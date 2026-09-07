@@ -25,6 +25,15 @@ static void scanout(Ppu *ppu, int mode, int brightness) {
 }
 
 int main(void) {
+  // At 120 Hz, 12 ms of work has already passed the 8.33 ms duplicate slot.
+  // Waiting another 8 ms would push a viable 60 Hz game frame past 20 ms.
+  assert(StarFoxPresentationDuplicateDelayMs(12000, 1000000, 120, 1) == 0);
+  assert(StarFoxPresentationDuplicateDelayMs(3000, 1000000, 120, 1) == 5);
+  assert(StarFoxPresentationDuplicateDelayMs(8000, 1000000, 120, 1) == 0);
+  assert(StarFoxPresentationDuplicateDelayMs(2000, 1000000, 240, 1) == 2);
+  assert(StarFoxPresentationDuplicateDelayMs(9000, 1000000, 240, 3) == 3);
+  assert(StarFoxPresentationDuplicateDelayMs(0, 1000000, 60, 1) == 0);
+  assert(StarFoxPresentationDuplicateDelayMs(0, 0, 120, 1) == 0);
   static Ppu ppu;
   static uint8_t stock[256 * 224 * 4], output[520 * 224 * 4];
   g_ppu = &ppu;

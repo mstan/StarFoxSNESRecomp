@@ -24,6 +24,7 @@
 
 #include "types.h"
 #include "starfox_rtl.h"
+#include "starfox_presentation.h"
 #include "common_cpu_infra.h"
 #include "framedump.h"
 #include "config.h"
@@ -83,6 +84,7 @@ void OpenGLRenderer_Create(struct RendererFuncs *funcs);
 struct SpcPlayer *g_spc_player;
 
 static uint8_t g_my_pixels[(256 + 2 * kWsExtraMax) * 4 * 240];
+static uint8_t g_presentation_pixels[sizeof(g_my_pixels)];
 
 /* Shared widescreen contract. The engine remains inert when these are zero. */
 bool g_ws_active;
@@ -533,11 +535,20 @@ static void DrawPpuFrameWithPerf(void) {
                              &pixel_buffer, &pitch);
   if (!pixel_buffer || pitch <= 0)
     return;
+  uint8 *target_pixels = pixel_buffer;
+  const int target_pitch = pitch;
+  pixel_buffer = g_presentation_pixels;
+  pitch = g_snes_width * 4;
+  // SDL's locked texture can be write-combined memory. Software rendering
+  // and history capture read pixels repeatedly, so keep that work in CPU RAM.
   RtlDrawPpuFrame(pixel_buffer, pitch, g_ppu_render_flags);
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
 
   PresentationHistoryRecord(pixel_buffer, pitch);
+  for (int y = 0; y < g_snes_height; y++)
+    memcpy(target_pixels + (size_t)y * target_pitch,
+           pixel_buffer + (size_t)y * pitch, (size_t)pitch);
   g_renderer_funcs.EndDraw();
   NoteCompletedPresentation();
 }
@@ -563,11 +574,10 @@ static uint32 ExtraPresentationsAfterFrame(uint32 frame) {
   return current > previous ? current - previous - 1u : 0;
 }
 
-static void DelayForDuplicatePresentation(void) {
-  const uint32 fps = g_config.presentation_fps;
-  if (fps <= 60)
-    return;
-  const uint32 delay = (1000u + fps / 2u) / fps;
+static void DelayForDuplicatePresentation(uint64 frame_started, unsigned duplicate) {
+  const uint32 delay = StarFoxPresentationDuplicateDelayMs(
+      SDL_GetPerformanceCounter() - frame_started, SDL_GetPerformanceFrequency(),
+      g_config.presentation_fps, duplicate);
   if (delay)
     SDL_Delay(delay);
 }
@@ -1589,6 +1599,7 @@ error_reading:;
     inputs |= debug_server_get_controller_inputs();
     uint32 frame_inputs = inputs | GetActiveControllers() |
                           debug_server_get_controller_active_mask();
+    const uint64 presentation_frame_started = SDL_GetPerformanceCounter();
     StarFoxEnhancedPreFrame(frame_inputs);
     RtlRunFrame(frame_inputs);
     StarFoxEnhancedPostFrame(frame_inputs);
@@ -1626,9 +1637,9 @@ error_reading:;
     if (!g_snes->disableRender) {
       if (ShouldPresentFrame(frameCtr)) {
         DrawPpuFrameWithPerf();
-        for (uint32 extra = ExtraPresentationsAfterFrame(frameCtr);
-             extra != 0; extra--) {
-          DelayForDuplicatePresentation();
+        const uint32 duplicates = ExtraPresentationsAfterFrame(frameCtr);
+        for (uint32 duplicate = 1; duplicate <= duplicates; duplicate++) {
+          DelayForDuplicatePresentation(presentation_frame_started, duplicate);
           PresentationDebugPresentCurrent();
         }
       } else {

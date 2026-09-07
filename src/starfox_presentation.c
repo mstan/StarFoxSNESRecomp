@@ -195,3 +195,12 @@ void StarFoxPresentationApplyBrightness(const RtlEnhancedRendererFrame *frame,
 unsigned StarFoxPresentationBrightness(int line) {
   return line >= 0 && line < 224 ? g_presentation_brightness[line] : 0;
 }
+
+unsigned StarFoxPresentationDuplicateDelayMs(uint64_t elapsed, uint64_t frequency,
+                                             unsigned fps, unsigned duplicate) {
+  if (fps <= 60 || !frequency || !duplicate) return 0;
+  const uint64_t deadline = frequency * duplicate / fps;
+  // Rendering and simulation already spent part of this frame's budget.
+  // A late duplicate must not add another full interval and slow gameplay.
+  return elapsed >= deadline ? 0 : (unsigned)((deadline - elapsed) * 1000 / frequency);
+}

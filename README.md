@@ -175,6 +175,9 @@ Set `PresentationFPS` to `20`, `30`, `60`, `90`, `120`, `240`, `360`, or
 `480` to choose the host presentation cadence. These modes keep SNES
 simulation cadence unchanged. Rates below 60 skip presentation draws; rates
 above 60 duplicate the newest completed presentation with vsync disabled.
+Duplicate waits use the remaining frame budget, so a slow render does not add
+another full wait interval. Software rendering and rewind capture use CPU
+memory before uploading the finished picture to the display texture.
 Enhanced-mode native shape poses use presentation interpolation to reduce
 object jitter, adapted from the Star Fox Enhanced reference behavior.
 
