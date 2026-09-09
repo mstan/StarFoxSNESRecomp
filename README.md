@@ -274,10 +274,9 @@ the current comparison notes and transfer candidates.
 
 ## License
 
-PolyForm Noncommercial 1.0.0. See `LICENSE`. Vendored dependencies retain their
-own licenses. The *Star Fox* ROM and all data
-extracted from it are not part of this repository and are not licensed for
-redistribution.
+PolyForm Noncommercial 1.0.0. See `LICENSE`. Vendored dependencies retain
+their own licenses. The *Star Fox* ROM and all data extracted from it are not
+part of this repository and are not licensed for redistribution.
 
 ---
 
