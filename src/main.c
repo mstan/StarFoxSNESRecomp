@@ -32,6 +32,8 @@
 #include "util.h"
 #include "starfox_mods.h"
 #include "starfox_spc_player.h"
+#include "starfox_state_menu.h"
+#include "snes_overlay_draw.h"
 
 #include "snes/snes.h"
 #ifdef __SWITCH__
@@ -529,6 +531,21 @@ static StarFoxPresentationClock g_presentation_clock;
 static uint64 g_presentation_deadline;
 static unsigned g_presentation_slot, g_presentation_slots;
 
+static void DrawStateMenu(void) {
+  uint8 *pixels = NULL;
+  int pitch = 0;
+  /* Keep the shared panel's 512x448 text at its native resolution even
+   * though the underlying SNES picture is only 224 lines tall. */
+  const int w = g_snes_width * 2, h = g_snes_height * 2;
+  g_renderer_funcs.BeginDraw(w, h, &pixels, &pitch);
+  if (!pixels || pitch <= 0) return;
+  snes_ovl_upscale_frame(pixels, pitch, w, h,
+                         (const uint32 *)g_presentation_pixels,
+                         g_snes_width * 4, g_snes_width, g_snes_height);
+  StarFoxStateMenuDraw(pixels, pitch, w, h);
+  g_renderer_funcs.EndDraw();
+}
+
 static void WaitForPresentation(uint64 deadline) {
   const uint64 frequency = SDL_GetPerformanceFrequency();
   for (;;) {
@@ -709,6 +726,7 @@ static SDL_Renderer *g_renderer;
 static SDL_Texture *g_texture;
 static SDL_Rect g_sdl_renderer_rect;
 static bool g_sdl_texture_locked;
+static int g_sdl_texture_width, g_sdl_texture_height;
 
 static bool SdlRenderer_Init(SDL_Window *window) {
   if (g_config.shader)
@@ -732,9 +750,10 @@ static bool SdlRenderer_Init(SDL_Window *window) {
   if (!g_config.ignore_aspect_ratio)
     snesrecomp_sdl_set_render_logical_size(renderer, g_snes_width, g_snes_height);
 
-  int tex_mult = 1;
+  g_sdl_texture_width = g_snes_width;
+  g_sdl_texture_height = g_snes_height;
   g_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
-                                g_snes_width * tex_mult, g_snes_height * tex_mult);
+                                g_sdl_texture_width, g_sdl_texture_height);
   /* Scale quality is per-texture in SDL3 (the SDL2 render hint is gone), so
    * this must follow texture creation. */
   if (g_texture) {
@@ -766,6 +785,19 @@ static void SdlRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pi
   if (pitch)
     *pitch = 0;
   g_sdl_texture_locked = false;
+  /* Menus use a taller framebuffer so their shared text remains legible.
+   * A lock rectangle must never exceed the actual texture allocation. */
+  if (width != g_sdl_texture_width || height != g_sdl_texture_height) {
+    SDL_Texture *texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING, width, height);
+    if (!texture) return;
+    snesrecomp_sdl_set_texture_linear(texture, g_config.linear_filtering);
+    snesrecomp_sdl_set_texture_opaque(texture);
+    SDL_DestroyTexture(g_texture);
+    g_texture = texture;
+    g_sdl_texture_width = width;
+    g_sdl_texture_height = height;
+  }
   g_sdl_renderer_rect.w = width;
   g_sdl_renderer_rect.h = height;
   if (!snesrecomp_sdl_lock_texture(g_texture, &g_sdl_renderer_rect,
@@ -872,7 +904,10 @@ static void post_mortem_atexit(void) {
 }
 
 #undef main
-int main(int argc, char** argv) {
+#ifndef STARFOX_DESKTOP_ENTRY
+#define STARFOX_DESKTOP_ENTRY main
+#endif
+int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
 #ifndef _WIN32
   /* On Windows, do NOT install a SIGSEGV handler: the CRT's signal shim
    * intercepts access violations BEFORE SetUnhandledExceptionFilter, so
@@ -1485,6 +1520,7 @@ error_reading:;
     }
   }
 
+  StarFoxStateMenuShutdown();
   if (g_config.autosave)
     HandleCommand(kKeys_Load + 0, true);
 
@@ -1493,6 +1529,9 @@ error_reading:;
 
   if (framedump_dir)
     FrameDump_Init(framedump_dir);
+
+  StarFoxStateMenuInit();
+  unsigned state_generation = StarFoxStateGeneration();
 
   bool running = true;
   uint32 lastTick = SDL_GetTicks();
@@ -1552,7 +1591,10 @@ error_reading:;
         }
         break;
       case SDL_KEYDOWN:
-        HandleInput(SNESRECOMP_SDL_EVENT_KEY(event), SNESRECOMP_SDL_EVENT_MOD(event), true);
+        if (StarFoxStateMenuIsOpen())
+          StarFoxStateMenuKey(SNESRECOMP_SDL_EVENT_KEY(event), SNESRECOMP_SDL_EVENT_REPEAT(event));
+        else if (!SNESRECOMP_SDL_EVENT_REPEAT(event))
+          HandleInput(SNESRECOMP_SDL_EVENT_KEY(event), SNESRECOMP_SDL_EVENT_MOD(event), true);
         break;
       case SDL_KEYUP:
         HandleInput(SNESRECOMP_SDL_EVENT_KEY(event), SNESRECOMP_SDL_EVENT_MOD(event), false);
@@ -1563,13 +1605,47 @@ error_reading:;
       }
     }
 
-    if (g_paused != audiopaused) {
-      audiopaused = g_paused;
+    /* Poll controller bindings during modals too: the shared menus navigate
+     * using exactly the same SNES input word as the game. */
+    {
+      const uint8_t *keys = snesrecomp_sdl_get_keyboard_state();
+      uint16_t kb_p1 = keybinds_read_player(keys, 1);
+      uint16_t kb_p2 = keybinds_read_player(keys, 2);
+      static const uint8 kKb2CtrlsIdx[12] = { 7, 6, 5, 4, 9, 8, 3, 11, 2, 10, 1, 0 };
+      for (int i = 0; i < 12; i++) {
+        HandleCommand(kKeys_Controls + i, (kb_p1 >> kKb2CtrlsIdx[i]) & 1);
+        HandleCommand(kKeys_ControlsP2 + i, (kb_p2 >> kKb2CtrlsIdx[i]) & 1);
+      }
+    }
+    uint32 inputs = g_input_state | g_pad_buttons | g_gamepad[0].axis_buttons |
+                    g_gamepad[1].axis_buttons << 12;
+    bool menu_consumed = StarFoxStateMenuPoll(inputs, SDL_GetTicks());
+    if (state_generation != StarFoxStateGeneration()) {
+      state_generation = StarFoxStateGeneration();
+      g_presentation_history_head = g_presentation_history_count = 0;
+      g_presentation_debug_frozen = g_presentation_debug_step_live = false;
+      memset(&g_presentation_clock, 0, sizeof(g_presentation_clock));
+      g_presentation_deadline = 0;
+      lastTick = SDL_GetTicks();
+      RtlApuLock();
+      g_audiobuffer_cur = g_audiobuffer_end = g_audiobuffer;
+      RtlApuUnlock();
+#if SNESRECOMP_SDL3
+      if (g_audio_stream) SDL_ClearAudioStream(g_audio_stream);
+#endif
+    }
+    const uint8 paused = g_paused || menu_consumed;
+    if (paused != audiopaused) {
+      audiopaused = paused;
       if (g_audio_device)
         snesrecomp_sdl_pause_audio_device(g_audio_device, audiopaused != 0);
     }
 
-    if (g_paused) {
+    if (paused) {
+      if (StarFoxStateMenuIsOpen()) DrawStateMenu();
+      memset(&g_presentation_clock, 0, sizeof(g_presentation_clock));
+      g_presentation_deadline = 0;
+      lastTick = SDL_GetTicks();
       SDL_Delay(16);
       continue;
     }
@@ -1596,27 +1672,7 @@ error_reading:;
     }
     debug_server_wait_if_paused();
 
-    /* Drive the SNES controller bits in g_input_state from keybinds.ini.
-     * mmx.ini's [KeyMap] still owns system commands (state save/load,
-     * fullscreen, pause, etc.); the 12 controller buttons per player
-     * come from keybinds.ini.
-     *
-     * Mapping below: keybinds bit layout (see keybinds.h) -> kKeys_Controls
-     * index (mmx.ini [Controls] order: Up Down Left Right Select Start
-     * A B X Y L R). HandleCommand is idempotent for set/clear, so calling
-     * it every frame is safe. */
-    {
-      const uint8_t *keys = snesrecomp_sdl_get_keyboard_state();
-      uint16_t kb_p1 = keybinds_read_player(keys, 1);
-      uint16_t kb_p2 = keybinds_read_player(keys, 2);
-      static const uint8 kKb2CtrlsIdx[12] = { 7, 6, 5, 4, 9, 8, 3, 11, 2, 10, 1, 0 };
-      for (int i = 0; i < 12; i++) {
-        HandleCommand(kKeys_Controls   + i, (kb_p1 >> kKb2CtrlsIdx[i]) & 1);
-        HandleCommand(kKeys_ControlsP2 + i, (kb_p2 >> kKb2CtrlsIdx[i]) & 1);
-      }
-    }
-
-    uint32 inputs = g_input_state | g_pad_buttons | g_gamepad[0].axis_buttons | g_gamepad[1].axis_buttons << 12;
+    inputs = StarFoxStateMenuGuestInput(inputs);
     inputs |= TickScript();
     inputs |= debug_server_get_controller_inputs();
     uint32 frame_inputs = inputs | GetActiveControllers() |
@@ -1679,6 +1735,9 @@ error_reading:;
         DrawPpuFrameWithoutPresent();
       }
     }
+
+    StarFoxStateMenuNoteFrame((const uint32 *)g_presentation_pixels,
+                              g_snes_width, g_snes_height);
 
     // if vsync isn't working, delay manually
     curTick = SDL_GetTicks();
@@ -1795,12 +1854,16 @@ static void HandleCommand(uint32 j, bool pressed) {
 
   if (!pressed)
     return;
+  if (StarFoxStateMenuIsOpen())
+    return;
   if (j <= kKeys_Load_Last) {
     RtlSaveLoad(kSaveLoad_Load, j - kKeys_Load);
   } else if (j <= kKeys_Save_Last) {
     RtlSaveLoad(kSaveLoad_Save, j - kKeys_Save);
   } else {
     switch (j) {
+    case kKeys_SaveStateMenu: StarFoxStateMenuOpenSave(); break;
+    case kKeys_Rewind: StarFoxStateMenuOpenRewind(); break;
     case kKeys_Fullscreen:
       g_win_flags ^= SNESRECOMP_SDL_WINDOW_FULLSCREEN_DESKTOP;
       snesrecomp_sdl_set_fullscreen(g_window, (g_win_flags & SNESRECOMP_SDL_WINDOW_FULLSCREEN_DESKTOP) != 0);
@@ -1808,7 +1871,9 @@ static void HandleCommand(uint32 j, bool pressed) {
       snesrecomp_sdl_show_cursor(g_cursor != 0);
       break;
     case kKeys_Reset:
+      StarFoxStateMenuShutdown();
       RtlReset(1);
+      StarFoxStateMenuInit();
       break;
     case kKeys_Pause: g_paused = !g_paused; break;
     case kKeys_PauseDimmed:
@@ -2104,7 +2169,9 @@ static const char kDefaultSmwIniContent[] =
   "PresentationDebug = Ctrl+F5\n"
   "PresentationStepForward = Ctrl+F6\n"
   "PresentationStepBack = Ctrl+F7\n"
-  "Load =      F1,     F2,     F3,     F4,     F5,     F6,     F7,     F8,     F9,     F10\n"
+  "SaveStateMenu = F7\n"
+  "Rewind = F8\n"
+  "Load =      F1,     F2,     F3,     F4,     F5,     F6,     F11,    F12,    F9,     F10\n"
   "Save = Shift+F1,Shift+F2,Shift+F3,Shift+F4,Shift+F5,Shift+F6,Shift+F7,Shift+F8,Shift+F9,Shift+F10\n"
   "\n"
   "[GamepadMap]\n"

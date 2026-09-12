@@ -65,7 +65,7 @@ Actual gameplay and owner-provided controls-preview captures; the ROMs and extra
 not included. See [adaptive widescreen behavior](docs/TRUE_WIDESCREEN.md) for
 the presentation rules and current validation limits.
 
-1. Download `StarFoxSNESRecomp-windows-x64-v0.2.0.zip` from
+1. Download `StarFoxSNESRecomp-windows-x64-v0.3.0.zip` from
    [Releases](../../releases) and extract it into a fresh folder.
 2. Run `StarFoxSNESRecomp.exe`.
 3. In the launcher, choose your legally obtained *Star Fox (USA), version 1.2*
@@ -110,8 +110,10 @@ in `config.ini`:
 
 | Action | Default |
 |--------|---------|
-| Save state 1-10 | Shift+F1..F10 |
-| Load state 1-10 | F1..F10 |
+| Save-state browser | F7 / Select+R |
+| Rewind filmstrip | F8 / Select+L |
+| Save state 1-10 directly | Shift+F1..F10 |
+| Load states 1-6, 7-8, 9-10 directly | F1..F6, F11..F12, F9..F10 |
 | Toggle pause | P |
 | Pause (dimmed) | Shift+P |
 | Reset | Ctrl+R |
@@ -124,6 +126,25 @@ in `config.ini`:
 | Presentation step back | Ctrl+F7 |
 | Window size | Ctrl+Up / Ctrl+Down |
 | Volume | Shift+= / Shift+- |
+
+In recomp-ui, open **Settings > Controls > Hotkeys** to rebind or clear
+**Save States** and **Rewind**, using the same editor and F7/F8 defaults as
+PSXRecomp. The corresponding `config.ini [KeyMap]` keys are `SaveStateMenu`
+and `Rewind`; modifiers and comma-separated alternatives are supported.
+An empty value, `None`, or `(unbound)` disables an action. Existing configs
+with the old slot 7/8 load defaults automatically use F11/F12 instead.
+
+The save browser has 12 slots with thumbnails. Use Up/Down to choose a slot,
+SNES X (keyboard S) to save, A (keyboard X) to load, and B (keyboard Z) or
+Escape to close. In rewind, use Left/Right to select a frame, A to resume
+there, or B/Escape to cancel. These menus pause guest execution and audio;
+closing buttons are held back from the game until released. A file load or
+reset starts a new rewind timeline.
+
+Save states now include the CPU, title scheduler and Super FX execution state.
+Older Star Fox states lack that data and are rejected; create fresh saves with
+this build. The runtime uses snesrecomp's shared snapshot and rewind modules.
+Star Fox remains single-player and does not expose a netplay menu.
 
 ## Widescreen
 
@@ -194,18 +215,17 @@ object jitter, adapted from the Star Fox Enhanced reference behavior.
 
 ## Building from source
 
-Prerequisites are CMake 3.16+, Ninja or another CMake-supported build system,
-Python 3.9+, rustup, SDL2, and OpenGL development files.
+Prerequisites are CMake 3.20+, Ninja or another CMake-supported build system,
+a C11/C++20 compiler, Python 3.9+, rustup, SDL3, and OpenGL development files.
+SDL2 is supported with `-DSNESRECOMP_SDL_BACKEND=SDL2`.
 
 ```bash
 git clone --recurse-submodules https://github.com/mstan/StarFoxSNESRecomp
-git clone https://github.com/mstan/snesrecomp
-git clone https://github.com/mstan/recomp-ui
 cd StarFoxSNESRecomp
 ```
 
-If you cloned without `--recurse-submodules`, initialize the reference sources
-before using the comparison tools:
+If you cloned without `--recurse-submodules`, initialize the pinned framework,
+launcher, and reference sources before building:
 
 ```bash
 git submodule update --init --recursive
@@ -214,18 +234,6 @@ git submodule update --init --recursive
 For bounded validation runs, pass `--frames N` after any `--script` or
 `--framedump` arguments. This exits cleanly after `N` simulated frames and keeps
 launcher UI disabled for automated captures.
-
-Make `snesrecomp/` point to the sibling framework checkout. On macOS or Linux:
-
-```bash
-ln -s ../snesrecomp snesrecomp
-```
-
-On Windows PowerShell:
-
-```powershell
-New-Item -ItemType Junction -Path snesrecomp -Target ..\snesrecomp
-```
 
 Place the verified ROM at `starfox.sfc`, generate the local recompilation
 output, and build:
@@ -244,6 +252,53 @@ Regeneration builds and requires the fast native analyzer by default. Set
 committed. The exact framework revision expected by this project is recorded
 by the `snesrecomp` gitlink.
 
+For framework development, use `-DSNESRECOMP_ROOT=/path/to/snesrecomp` and
+optionally `-DRECOMP_UI_ROOT=/path/to/recomp-ui`. Pass the same framework path
+to regeneration with `SNESRECOMP_ROOT=/path/to/snesrecomp bash tools/regen.sh`.
+The default build uses the pinned submodules without local links or junctions.
+
+The build follows snesrecomp's `tools/new_project/templates/CMakeLists.txt.in`,
+using Gundam Wing: Endless Duel as the reference consumer. Shared CMake helpers
+own the runtime source list, SDL selection, launcher assets, GLSL shaders,
+fiber compatibility, and crash reports. Star Fox retains its custom host,
+configuration, Super FX integration, Enhanced renderer, and Arwing64 tool.
+Release configurations use `VERSION`; other configurations use `dev`.
+`-DSNESRECOMP_BUILD_VERSION=<version>` overrides either default.
+
+The manual **Build** workflow in `.github/workflows/release.yml` follows the
+new-project CI template. It records the checked-out pins, compiles the Linux
+SDL2 host and dependencies, and runs the framework and Star Fox ROM-free tests.
+It does not publish a release or validate ROM-derived code or gameplay. Run
+its compilation check locally with:
+
+```bash
+cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DSTARFOX_HOST_CHECK_ONLY=ON -DSNESRECOMP_SDL_BACKEND=SDL2
+cmake --build build-ci --parallel 2
+```
+
+This explicit CI mode excludes generated code even when it is present locally
+and produces a host-check static archive, not a playable executable. Normal
+builds still require verified ROM-derived output in `src/gen/`.
+
+The menu integration was compared with a separately generated Star Fox
+reference project. The current scaffold includes the shared modules but its
+minimal host does not connect their menu input and presentation; this title's
+host supplies that bridge. The framework pin includes the beam-progress fix
+needed for Star Fox to boot and the complete Super FX save-state format.
+
+To check actual ROM execution, add `-DSTARFOX_STATE_TESTS=ON` to a normal
+build, then run:
+
+```bash
+python tests/run_state_tests.py build/starfox_state_tests starfox.sfc
+# Windows: use build/starfox_state_tests.exe
+```
+
+The harness uses temporary save files, checks recomp-ui binding persistence,
+compares complete snapshots after deterministic replay, and tests menu save,
+load, rewind cancellation/commit and restoration in a fresh process.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -252,7 +307,8 @@ by the `snesrecomp` gitlink.
 | `src/gen/` | ROM-derived recompiler output; generated locally and ignored. |
 | `recomp/` | Per-bank recompilation declarations and function metadata. |
 | `docs/` | Reference-source provenance and development documentation. |
-| `snesrecomp/` | Junction or symlink to the sibling framework checkout. |
+| `snesrecomp/` | Pinned shared framework submodule. |
+| `recomp-ui/` | Pinned shared launcher submodule. |
 | `third_party/` | Vendored dependencies retaining their own licenses. |
 | `third_party/starfox-enhanced/` | Pinned reference-only decomp used for comparison and symbol provenance. |
 | `config.ini` | Runtime graphics, audio, controller, and hotkey settings. |

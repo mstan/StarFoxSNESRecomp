@@ -28,13 +28,15 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   // ControlsP2
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   // LoadState
-  _(SDLK_F1), _(SDLK_F2), _(SDLK_F3), _(SDLK_F4), _(SDLK_F5), _(SDLK_F6), _(SDLK_F7), _(SDLK_F8), _(SDLK_F9), _(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
+  _(SDLK_F1), _(SDLK_F2), _(SDLK_F3), _(SDLK_F4), _(SDLK_F5), _(SDLK_F6), _(SDLK_F11), _(SDLK_F12), _(SDLK_F9), _(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
   // SaveState
   S(SDLK_F1), S(SDLK_F2), S(SDLK_F3), S(SDLK_F4), S(SDLK_F5), S(SDLK_F6), S(SDLK_F7), S(SDLK_F8), S(SDLK_F9), S(SDLK_F10), N, N, N, N, N, N, N, N, N, N,
   // Fullscreen, Reset, Pause, PauseDimmed, Turbo, WindowBigger, WindowSmaller, DisplayPerf, ToggleRenderer, PresentationDebug, PresentationStepForward, PresentationStepBack
   A(SDLK_RETURN), C(SDLK_r), S(SDLK_p), _(SDLK_p), _(SDLK_TAB), N, N, _(SDLK_f), _(SDLK_r), C(SDLK_F5), C(SDLK_F6), C(SDLK_F7),
   // VolumeUp VolumeDown
   0, 0,
+  // SaveStateMenu Rewind
+  _(SDLK_F7), _(SDLK_F8),
 };
 #undef _
 #undef A
@@ -57,6 +59,7 @@ static const KeyNameId kKeyNameId[] = {
   S(Pause), S(PauseDimmed), S(Turbo), S(WindowBigger), S(WindowSmaller),
   S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
   S(PresentationDebug), S(PresentationStepForward), S(PresentationStepBack),
+  S(SaveStateMenu), S(Rewind),
 };
 #undef S
 #undef M
@@ -93,8 +96,17 @@ static bool KeyMapHash_Add(uint16 key, uint16 cmd) {
   uint16 *cur = &keymap_hash_first[j];
   while (*cur) {
     KeyMapHashEnt *ent = &keymap_hash[*cur - 1];
-    if (ent->key == key)
-      return false;
+    if (ent->key == key) {
+      /* Launcher-editable menu actions take precedence over legacy slot
+       * shortcuts, independently of config line/default registration order. */
+      bool new_menu = cmd == kKeys_SaveStateMenu || cmd == kKeys_Rewind;
+      bool old_menu = ent->cmd == kKeys_SaveStateMenu || ent->cmd == kKeys_Rewind;
+      bool new_slot = cmd >= kKeys_Load && cmd <= kKeys_Save_Last;
+      bool old_slot = ent->cmd >= kKeys_Load && ent->cmd <= kKeys_Save_Last;
+      if (new_menu && old_slot) ent->cmd = cmd;
+      keymap_hash_size--;
+      return (new_menu && old_slot) || (old_menu && new_slot);
+    }
     cur = &ent->next;
   }
   *cur = i + 1;
@@ -129,8 +141,9 @@ int FindCmdForSdlKey(SDL_Keycode code, SDL_Keymod mod) {
 static void ParseKeyArray(char *value, int cmd, int size) {
   char *s;
   int i = 0;
-  for (; i < size && (s = NextDelim(&value, ',')) != NULL; i++, cmd += (cmd != 0)) {
-    if (*s == 0)
+  for (; (i < size || size == 1) && (s = NextDelim(&value, ',')) != NULL;
+       i++, cmd += (cmd != 0 && size != 1)) {
+    if (*s == 0 || StringEqualsNoCase(s, "None") || StringEqualsNoCase(s, "(unbound)"))
       continue;
     int key_with_mod = 0;
     for (;;) {
@@ -145,6 +158,10 @@ static void ParseKeyArray(char *value, int cmd, int size) {
       }
     }
     SDL_Keycode key = SDL_GetKeyFromName(s);
+    /* Old config.ini files loaded slots 7/8 on the new shared menu keys.
+     * Migrate those two defaults without rewriting the user's config. */
+    if (!key_with_mod && cmd == kKeys_Load + 6 && key == SDLK_F7) key = SDLK_F11;
+    if (!key_with_mod && cmd == kKeys_Load + 7 && key == SDLK_F8) key = SDLK_F12;
     if (key == SDLK_UNKNOWN) {
       fprintf(stderr, "Unknown key: '%s'\n", s);
       continue;
