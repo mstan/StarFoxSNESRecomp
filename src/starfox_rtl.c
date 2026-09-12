@@ -7,6 +7,8 @@
 #include "config.h"
 #include "cpu_state.h"
 #include "snes/cart.h"
+#include "snes/apu.h"
+#include "snes/cpu.h"
 #include "snes/dma.h"
 #include "snes/interp_bridge.h"
 #include "snes/ppu.h"
@@ -69,6 +71,145 @@ static uint16_t s_armed_god_nukes[8];
 static unsigned s_armed_god_nuke_count;
 static bool s_restore_superfx_hud_colour;
 static uint8_t s_saved_superfx_hud_colour;
+
+/* The guest blob contains the legacy Cpu, not the recomp CpuState or this
+ * title's vblank continuation. Carry those alongside the public runtime
+ * scheduler snapshots. Like the framework's guest blob this is versioned,
+ * native-layout data; it contains no restored host pointers. */
+typedef struct StarFoxExecutionState {
+  CpuState cpu;
+  uint64_t next_vblank, refresh_phase, refresh_charged;
+  uint64_t main_cycles, apu_pace, apu_sync_cycles, apu_sync_master, apu_frame_start;
+  ApuPortSched apu_port;
+  PpuRollbackResidue ppu;
+  uint32_t resume_pc, inputs, frames;
+  uint32_t bridge_size;
+  uint8_t bridge[1024];
+  uint16_t title_frames, nukes[8];
+  uint8_t started, apu_time_valid, memsel, hdmaen, hdma_pending, apu_driving;
+  uint8_t nuke_count;
+} StarFoxExecutionState;
+
+static unsigned s_state_generation;
+static bool s_extra_loaded;
+static PpuRollbackResidue s_loaded_ppu;
+
+unsigned StarFoxStateGeneration(void) { return s_state_generation; }
+
+void StarFoxSaveStateExtra(SaveLoadInfo *sli) {
+  extern int snes_frame_counter, g_interp_apu_driving;
+  StarFoxExecutionState state = {0};
+  uint32_t header[3] = {0x53465853u, 1, sizeof(state)}; /* SFXS */
+  state.cpu = g_cpu;
+  state.cpu.ram = NULL;
+  state.next_vblank = s_next_vblank_master;
+  state.resume_pc = s_resume_pc;
+  state.started = s_started;
+  state.inputs = s_last_player_inputs;
+  state.frames = snes_frame_counter;
+  state.title_frames = counter_global_frames;
+  state.nuke_count = s_armed_god_nuke_count;
+  memcpy(state.nukes, s_armed_god_nukes, sizeof(state.nukes));
+  state.main_cycles = g_main_cpu_cycles_estimate;
+  state.apu_pace = g_apu_pace_cycles_estimate;
+  state.apu_sync_cycles = g_apu_last_sync_cycles;
+  state.apu_sync_master = g_apu_last_sync_master;
+  rtl_apu_snapshot_pacing(&state.apu_frame_start, &state.apu_time_valid);
+  apu_port_sched_save(g_snes->apu, &state.apu_port);
+  snes_refresh_state_get(&state.refresh_phase, &state.refresh_charged);
+  state.memsel = g_memsel;
+  state.hdmaen = g_snesrecomp_last_hdmaen;
+  state.apu_driving = g_interp_apu_driving;
+  state.hdma_pending = dma_hdma_pending_init_get(g_dma);
+  ppu_rb_residue_get(g_ppu, &state.ppu);
+  state.bridge_size = (uint32_t)interp_bridge_rb_state_size();
+  if (state.bridge_size > sizeof(state.bridge))
+    Die("Star Fox save-state bridge capacity needs updating");
+  interp_bridge_rb_state_save(state.bridge);
+  sli->func(sli, header, sizeof(header));
+  sli->func(sli, &state, sizeof(state));
+}
+
+void StarFoxLoadStateExtra(SaveLoadInfo *sli, uint32_t version) {
+  extern int snes_frame_counter, g_interp_apu_driving;
+  (void)version;
+  uint32_t header[3] = {0};
+  StarFoxExecutionState state = {0};
+  s_extra_loaded = false;
+  sli->func(sli, header, sizeof(header));
+  if (header[0] != 0x53465853u || header[1] != 1 || header[2] != sizeof(state)) {
+    fprintf(stderr, "[starfox] incompatible execution-state extension\n");
+    return;
+  }
+  sli->func(sli, &state, sizeof(state));
+  if (state.bridge_size != interp_bridge_rb_state_size() ||
+      state.nuke_count > 8 ||
+      (state.started && !cpu_pc24_resumable(state.resume_pc))) {
+    fprintf(stderr, "[starfox] invalid execution-state extension\n");
+    return;
+  }
+  g_cpu = state.cpu;
+  g_cpu.ram = g_ram;
+  s_next_vblank_master = state.next_vblank;
+  s_resume_pc = state.resume_pc;
+  s_started = state.started;
+  s_last_player_inputs = state.inputs;
+  snes_frame_counter = state.frames;
+  counter_global_frames = state.title_frames;
+  s_armed_god_nuke_count = state.nuke_count;
+  memcpy(s_armed_god_nukes, state.nukes, sizeof(state.nukes));
+  g_main_cpu_cycles_estimate = state.main_cycles;
+  g_apu_pace_cycles_estimate = state.apu_pace;
+  g_apu_last_sync_cycles = state.apu_sync_cycles;
+  g_apu_last_sync_master = state.apu_sync_master;
+  rtl_apu_restore_pacing(state.apu_frame_start, state.apu_time_valid);
+  apu_port_sched_restore(g_snes->apu, &state.apu_port);
+  snes_refresh_state_set(state.refresh_phase, state.refresh_charged);
+  g_memsel = state.memsel;
+  g_snesrecomp_last_hdmaen = state.hdmaen;
+  g_interp_apu_driving = state.apu_driving;
+  dma_hdma_pending_init_set(g_dma, state.hdma_pending);
+  ppu_rb_residue_set(g_ppu, &state.ppu);
+  s_loaded_ppu = state.ppu;
+  interp_bridge_rb_state_load(state.bridge);
+  s_extra_loaded = true;
+}
+
+void StarFoxStateLoaded(uint32_t version) {
+  (void)version;
+  if (!s_extra_loaded) {
+    /* Older states have no continuation. Reconstruct registers from the
+     * legacy CPU instead of retaining registers from the abandoned future. */
+    Cpu *cpu = g_snes->cpu;
+    g_cpu.A = cpu->a; g_cpu.X = cpu->x; g_cpu.Y = cpu->y;
+    g_cpu.S = cpu->sp; g_cpu.D = cpu->dp;
+    g_cpu.DB = cpu->db; g_cpu.PB = cpu->k;
+    g_cpu.P = cpu_getFlags(cpu);
+    cpu_p_to_mirrors(&g_cpu);
+    g_cpu.emulation = cpu->e;
+    g_cpu.host_return_valid = 0;
+    s_resume_pc = ((uint32_t)cpu->k << 16) | cpu->pc;
+    s_started = cpu_pc24_resumable(s_resume_pc);
+    s_next_vblank_master = 0;
+    s_armed_god_nuke_count = 0;
+    fprintf(stderr, "[starfox] legacy state lacks an exact CPU continuation\n");
+  }
+  if (s_extra_loaded)
+    ppu_rb_residue_set(g_ppu, &s_loaded_ppu);
+  s_extra_loaded = false;
+  s_nukes_before_count = 0;
+  s_bomb_pressed = s_god_nuke_request = false;
+  s_restore_superfx_hud_colour = false;
+  StarFoxEnhancedResetHistory();
+  arwing64_picture_reset();
+  if (g_snes->cart->superfx) {
+    SuperFx *fx = g_snes->cart->superfx;
+    SuperFxEnhancementMode mode = superfx_get_enhancement_mode(fx);
+    superfx_set_enhancement_mode(fx, kSuperFxEnhancement_None);
+    superfx_set_enhancement_mode(fx, mode);
+  }
+  s_state_generation++;
+}
 
 static uint16_t rgb555(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(r | ((uint16_t)g << 5) | ((uint16_t)b << 10));

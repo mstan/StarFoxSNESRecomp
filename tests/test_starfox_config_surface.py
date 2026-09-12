@@ -357,7 +357,7 @@ class StarFoxConfigSurfaceTests(unittest.TestCase):
         self.assertIn("third_party/starfox-enhanced/src/render/scaled_text_renderer.cpp", cmake)
         self.assertIn("third_party/starfox-enhanced/src/assets/shape_decoder.cpp", cmake)
         self.assertIn("${CMAKE_SOURCE_DIR}/third_party/stb", cmake)
-        self.assertIn("${CMAKE_SOURCE_DIR}/recomp-ui/src/third_party", cmake)
+        self.assertIn("${RECOMP_UI_ROOT}/src/third_party", cmake)
         self.assertNotIn("src/starfox_native_shape.c", cmake)
         self.assertIn("focal", (ROOT / "third_party" / "starfox-enhanced" / "include" / "starfox" / "render" / "software_renderer.hpp").read_text(encoding="utf-8"))
 

@@ -209,6 +209,15 @@ static int g_source_logic_period_frames = 4;
 static uint16_t g_last_pose_alpha_q8;
 static uint8_t g_source_interpolation_valid;
 
+void StarFoxEnhancedResetHistory(void) {
+  memset(&g_source_snapshot, 0, sizeof(g_source_snapshot));
+  memset(&g_previous_source_snapshot, 0, sizeof(g_previous_source_snapshot));
+  g_source_interpolation_valid = 0;
+  g_source_logic_change_frame = 0;
+  g_source_logic_period_frames = 4;
+  g_last_pose_alpha_q8 = 256;
+}
+
 static int starfox_enhanced_debug_command(const char *cmd, const char *args,
                                           DebugServerGameSendLine send_line);
 static void starfox_enhanced_register_debug_commands(void);

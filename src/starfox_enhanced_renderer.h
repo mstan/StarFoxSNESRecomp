@@ -6,5 +6,6 @@
 RtlEnhancedRenderResult
 StarFoxEnhancedRenderFrame(RtlEnhancedRendererFrame *frame);
 void StarFoxEnhancedLatchSourceFrame(void);
+void StarFoxEnhancedResetHistory(void);
 
 #endif

@@ -28,6 +28,8 @@ enum {
   kKeys_PresentationStepBack,
   kKeys_VolumeUp,
   kKeys_VolumeDown,
+  kKeys_SaveStateMenu,
+  kKeys_Rewind,
   kKeys_Total,
 };
 
