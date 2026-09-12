@@ -87,6 +87,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $stage
 # Include the tracked feature docs and gallery so README links work offline.
 New-Item -ItemType Directory -Path (Join-Path $stage 'docs\images') -Force | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $root 'docs') -Filter '*.md' -File |

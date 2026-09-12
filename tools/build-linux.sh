@@ -245,6 +245,7 @@ $LINUXDEPLOY --appdir "$APPDIR" --executable "$BIN" \
 echo "      staging launcher assets/ -> AppDir/usr/bin/assets"
 cp -r "$(dirname "$BIN")/assets" "$APPDIR/usr/bin/assets"
 cp "$REPO/README.md" "$APPDIR/usr/bin/README.md"
+cp "$REPO/LICENSE" "$APPDIR/usr/bin/LICENSE"
 mkdir -p "$APPDIR/usr/bin/docs/images"
 cp "$REPO"/docs/*.md "$APPDIR/usr/bin/docs/"
 cp "$REPO"/docs/images/*.png "$APPDIR/usr/bin/docs/images/"
