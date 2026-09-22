@@ -76,7 +76,7 @@ add_library(StarFoxEnhancedNativeRenderer OBJECT
   src/starfox_enhanced_native.cpp
   ${STARFOX_REFERENCE_SOURCES})
 target_include_directories(StarFoxEnhancedNativeRenderer PRIVATE
-  ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/recomp
+  ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/recomp ${CMAKE_SOURCE_DIR}/third_party
   ${CMAKE_SOURCE_DIR}/third_party/starfox-enhanced/include
   ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
 target_compile_features(StarFoxEnhancedNativeRenderer PRIVATE cxx_std_20)
@@ -112,7 +112,7 @@ target_sources(StarFoxSNESRecomp PRIVATE
 )
 
 target_include_directories(StarFoxSNESRecomp PRIVATE
-  ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/recomp
+  ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/recomp ${CMAKE_SOURCE_DIR}/third_party
   ${CMAKE_SOURCE_DIR}/src/mods/arwing64
   ${CMAKE_SOURCE_DIR}/third_party/stb
   ${RECOMP_UI_ROOT}/src/third_party

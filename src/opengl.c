@@ -1,4 +1,4 @@
-#include "third_party/gl_core/gl_core_3_1.h"
+#include "gl_core/gl_core_3_1.h"
 #include "desktop/sdl_compat.h"
 #include <stdio.h>
 #include <stdbool.h>
