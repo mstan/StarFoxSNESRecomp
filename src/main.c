@@ -41,6 +41,7 @@
 #endif
 
 #include "launcher.h"
+#include "host_args.h"
 #if defined(SNES_LAUNCHER) || defined(RECOMP_LAUNCHER)
 #if defined(RECOMP_LAUNCHER)
 /* Shared recomp-ui launcher (F:\Projects\recomp-ui) — the console-agnostic
@@ -949,11 +950,44 @@ int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
   /* Capture program path before argv shift — used to place keybinds.ini
    * next to the executable. */
   const char *program_path = (argc >= 1) ? argv[0] : NULL;
-  argc--, argv++;
-  const char *config_file = NULL;
-  if (argc >= 2 && strcmp(argv[0], "--config") == 0) {
-    config_file = argv[1];
-    argc -= 2, argv += 2;
+  /* The command line is engine-owned; see snesrecomp/runner/src/host_args.h.
+   * This host never delegates to snesrecomp_desktop_main, so it carried its own
+   * copy of the flags and was missing --rom, --no-launcher and --help. */
+  static const char kStarFoxExtraUsage[] =
+      "\nStar Fox only:\n"
+      "  --frames <n>          exit cleanly after n simulated frames.\n";
+  SnesrecompHostArgs args;
+  if (!snesrecomp_host_args_parse(&argc, &argv, &args)) return 2;
+  if (args.help) {
+    snesrecomp_host_args_usage(program_path, kStarFoxExtraUsage);
+    return 0;
+  }
+  uint32 max_frames = 0;
+  for (int i = 1; i < argc; ) {
+    if (!argv[i] || strcmp(argv[i], "--frames") != 0) { i++; continue; }
+    if (i + 1 >= argc || !argv[i + 1]) {
+      fprintf(stderr, "--frames requires a count\n");
+      return 2;
+    }
+    max_frames = (uint32)strtoul(argv[i + 1], NULL, 0);
+    for (int j = i; j + 2 <= argc; j++) argv[j] = argv[j + 2];
+    argc -= 2;
+  }
+  if (!snesrecomp_host_args_reject_unknown(argc, argv, program_path,
+                                           kStarFoxExtraUsage))
+    return 2;
+  const int start_paused = args.start_paused;
+  const char *script_file = args.script_file;
+  const char *framedump_dir = args.framedump_dir;
+  const char *config_file = args.config_file;
+  /* Downstream still reads the positional ROM from argv[0]. */
+  static char *rom_argv[2];
+  rom_argv[0] = (char *)(args.rom ? args.rom : "");
+  rom_argv[1] = NULL;
+  argv = rom_argv;
+  argc = args.rom ? 1 : 0;
+  if (config_file) {
+    /* nothing to anchor: an explicit config wins */
   } else {
     /* Anchor cwd to the binary's own directory FIRST, using the shared engine
      * helper the other SNES titles use. This is what makes an AppImage work:
@@ -978,31 +1012,7 @@ int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
                              anchored ? "ok" : "declined");
     }
   }
-  int start_paused = 0;
-  if (argc >= 1 && strcmp(argv[0], "--paused") == 0) {
-    start_paused = 1;
-    argc -= 1, argv += 1;
-  }
-  const char *script_file = NULL;
-  if (argc >= 2 && strcmp(argv[0], "--script") == 0) {
-    script_file = argv[1];
-    argc -= 2, argv += 2;
-  }
-  const char *framedump_dir = NULL;
-  if (argc >= 2 && strcmp(argv[0], "--framedump") == 0) {
-    framedump_dir = argv[1];
-    argc -= 2, argv += 2;
-  }
-  uint32 max_frames = 0;
-  if (argc >= 2 && strcmp(argv[0], "--frames") == 0) {
-    max_frames = (uint32)strtoul(argv[1], NULL, 0);
-    argc -= 2, argv += 2;
-  }
-  int force_launcher = 0;
-  if (argc >= 1 && strcmp(argv[0], "--launcher") == 0) {
-    force_launcher = 1;
-    argc--, argv++;
-  }
+  const int force_launcher = args.force_launcher;
   ParseConfigFile(config_file);
   // Apply local overrides if present (gitignored). Lets a developer
   // mute audio etc. without touching the checked-in mmx.ini. Last
@@ -1044,7 +1054,7 @@ int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
                    framedump_dir != NULL || max_frames != 0;
     int have_positional = argc >= 1 && argv[0] && argv[0][0] != '-' && argv[0][0];
     const char *no_launcher = getenv("SNESRECOMP_NO_LAUNCHER");
-    int want_launcher = !headless &&
+    int want_launcher = !headless && !args.no_launcher &&
         (force_launcher ||
          (!have_positional && !(no_launcher && *no_launcher)));
 
