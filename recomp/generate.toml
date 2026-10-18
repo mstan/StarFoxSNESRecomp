@@ -1,0 +1,8 @@
+schema = 1
+identity_file = "rom_identity.txt"
+cfg_roots = true
+no_host_root_scan = true
+
+[[prepare]]
+script = "tools/ingest_starfox_enhanced_symbols.py"
+args = ["--allow-missing"]

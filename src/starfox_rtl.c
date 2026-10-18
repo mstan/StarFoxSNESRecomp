@@ -34,20 +34,22 @@ enum {
   kSuperFxHudColour = 0x3512,
   kRamAllst = 0x121d,
   kRamAlFreeLst = 0x121f,
-  kRamInternalPlayPt = 0x162c,
-  kRamPShipFlags3 = 0x1563,
-  kRamSpecialDelay = 0x15b1,
-  kRamSpecWepCnt = 0x1634,
-  kRamPcBoxObjLw = 0x15ee,
-  kRamPcBoxObjRw = 0x15f0,
-  kRamPcBoxObjB = 0x15f2,
+  /* Verified retail USA layout (CRC32 8FC4E6D0). The upstream Enhanced
+   * assembler's expanded RAM layout is different. In retail, $1563 is a
+   * wing-object pointer, not PSHIPFLAGS3; $162C is matrix scratch. */
+  kRamInternalPlayPt = 0x1238, /* original PlayerObject, active-list member */
+  /* $03:B2B7 reads PSHIPFLAGS3; matches playersnd in the original source. */
+  kRamPShipFlags3 = 0x14d8,
+  kRamSpecWepCnt = 0x15ad,
+  kRamPcBoxObjLw = 0x1563,
+  kRamPcBoxObjRw = 0x1565,
+  kRamPcBoxObjB = 0x1567,
   kObjBase = 0x0336,
   kObjSize = 0x36,
   kObjCount = 0x46,
   kObjNext = 0x00,
   kObjShape = 0x04,
   kObjType = 0x09,
-  kObjStratPtr = 0x16,
   kObjSFlags = 0x1d,
   kObjSFlags2 = 0x1e,
   kObjHp = 0x2a,
@@ -55,9 +57,9 @@ enum {
   kRunnerInputA = 0x100,
   kRunnerInputR = 0x800,
   kPShipNoCollisions = 0x08,
-  kShapeNull = 0x9500,
-  kShapeNuke = 0x97a0,
-  kStratNukeExplosion = 0x21a373,
+  kShapeNull = 0xaca1,
+  kShapeNuke = 0xaf41,
+  kBombSpawnFrameLimit = 32,
 };
 
 static bool irq_pending(void);
@@ -65,7 +67,7 @@ static bool irq_pending(void);
 static uint32_t s_last_player_inputs;
 static uint16_t s_nukes_before[8];
 static unsigned s_nukes_before_count;
-static bool s_bomb_pressed;
+static uint8_t s_bomb_spawn_wait;
 static bool s_god_nuke_request;
 static uint16_t s_armed_god_nukes[8];
 static unsigned s_armed_god_nuke_count;
@@ -86,8 +88,10 @@ typedef struct StarFoxExecutionState {
   uint32_t bridge_size;
   uint8_t bridge[1024];
   uint16_t title_frames, nukes[8];
+  uint16_t nukes_before[8];
   uint8_t started, apu_time_valid, memsel, hdmaen, hdma_pending, apu_driving;
   uint8_t nuke_count;
+  uint8_t nukes_before_count, bomb_spawn_wait, god_nuke_request;
 } StarFoxExecutionState;
 
 static unsigned s_state_generation;
@@ -99,7 +103,7 @@ unsigned StarFoxStateGeneration(void) { return s_state_generation; }
 void StarFoxSaveStateExtra(SaveLoadInfo *sli) {
   extern int snes_frame_counter, g_interp_apu_driving;
   StarFoxExecutionState state = {0};
-  uint32_t header[3] = {0x53465853u, 1, sizeof(state)}; /* SFXS */
+  uint32_t header[3] = {0x53465853u, 2, sizeof(state)}; /* SFXS */
   state.cpu = g_cpu;
   state.cpu.ram = NULL;
   state.next_vblank = s_next_vblank_master;
@@ -110,6 +114,10 @@ void StarFoxSaveStateExtra(SaveLoadInfo *sli) {
   state.title_frames = counter_global_frames;
   state.nuke_count = s_armed_god_nuke_count;
   memcpy(state.nukes, s_armed_god_nukes, sizeof(state.nukes));
+  state.nukes_before_count = s_nukes_before_count;
+  state.bomb_spawn_wait = s_bomb_spawn_wait;
+  state.god_nuke_request = s_god_nuke_request;
+  memcpy(state.nukes_before, s_nukes_before, sizeof(state.nukes_before));
   state.main_cycles = g_main_cpu_cycles_estimate;
   state.apu_pace = g_apu_pace_cycles_estimate;
   state.apu_sync_cycles = g_apu_last_sync_cycles;
@@ -137,13 +145,15 @@ void StarFoxLoadStateExtra(SaveLoadInfo *sli, uint32_t version) {
   StarFoxExecutionState state = {0};
   s_extra_loaded = false;
   sli->func(sli, header, sizeof(header));
-  if (header[0] != 0x53465853u || header[1] != 1 || header[2] != sizeof(state)) {
+  if (header[0] != 0x53465853u || header[1] != 2 || header[2] != sizeof(state)) {
     fprintf(stderr, "[starfox] incompatible execution-state extension\n");
     return;
   }
   sli->func(sli, &state, sizeof(state));
   if (state.bridge_size != interp_bridge_rb_state_size() ||
       state.nuke_count > 8 ||
+      state.nukes_before_count > 8 || state.bomb_spawn_wait > kBombSpawnFrameLimit ||
+      state.god_nuke_request > 1 ||
       (state.started && !cpu_pc24_resumable(state.resume_pc))) {
     fprintf(stderr, "[starfox] invalid execution-state extension\n");
     return;
@@ -158,6 +168,10 @@ void StarFoxLoadStateExtra(SaveLoadInfo *sli, uint32_t version) {
   counter_global_frames = state.title_frames;
   s_armed_god_nuke_count = state.nuke_count;
   memcpy(s_armed_god_nukes, state.nukes, sizeof(state.nukes));
+  s_nukes_before_count = state.nukes_before_count;
+  s_bomb_spawn_wait = state.bomb_spawn_wait;
+  s_god_nuke_request = state.god_nuke_request != 0;
+  memcpy(s_nukes_before, state.nukes_before, sizeof(state.nukes_before));
   g_main_cpu_cycles_estimate = state.main_cycles;
   g_apu_pace_cycles_estimate = state.apu_pace;
   g_apu_last_sync_cycles = state.apu_sync_cycles;
@@ -192,13 +206,14 @@ void StarFoxStateLoaded(uint32_t version) {
     s_started = cpu_pc24_resumable(s_resume_pc);
     s_next_vblank_master = 0;
     s_armed_god_nuke_count = 0;
+    s_nukes_before_count = 0;
+    s_bomb_spawn_wait = 0;
+    s_god_nuke_request = false;
     fprintf(stderr, "[starfox] legacy state lacks an exact CPU continuation\n");
   }
   if (s_extra_loaded)
     ppu_rb_residue_set(g_ppu, &s_loaded_ppu);
   s_extra_loaded = false;
-  s_nukes_before_count = 0;
-  s_bomb_pressed = s_god_nuke_request = false;
   s_restore_superfx_hud_colour = false;
   StarFoxEnhancedResetHistory();
   arwing64_picture_reset();
@@ -334,12 +349,6 @@ static uint16_t starfox_object_shape(uint16_t pointer) {
   return wram_read16((uint16_t)(pointer + kObjShape));
 }
 
-static uint32_t starfox_object_strategy(uint16_t pointer) {
-  return (uint32_t)g_ram[pointer + kObjStratPtr] |
-         ((uint32_t)g_ram[pointer + kObjStratPtr + 1] << 8) |
-         ((uint32_t)g_ram[pointer + kObjStratPtr + 2] << 16);
-}
-
 static bool starfox_pointer_in_array(uint16_t pointer, const uint16_t *items,
                                      unsigned count) {
   for (unsigned i = 0; i < count; i++) {
@@ -402,7 +411,7 @@ static bool starfox_object_is_player_part(uint16_t pointer) {
 
 static bool starfox_god_nuke_shape_damage_only(uint16_t shape) {
   static const uint16_t kDamageOnlyShapes[] = {
-      0xa6ef, 0xa70b, 0xa727, 0xa743, 0xa75f, 0xa77b,
+      0xbe90, 0xbeac, 0xbec8, 0xbee4, 0xbf00, 0xbf1c,
   };
   return starfox_pointer_in_array(shape, kDamageOnlyShapes,
                                   sizeof(kDamageOnlyShapes) /
@@ -410,7 +419,7 @@ static bool starfox_god_nuke_shape_damage_only(uint16_t shape) {
 }
 
 static bool starfox_god_nuke_shape_skip(uint16_t shape) {
-  return shape == 0x94ac || shape == 0x94e4;
+  return shape == 0xac4d || shape == 0xac85;
 }
 
 static void starfox_detonate_god_nuke(void) {
@@ -429,7 +438,6 @@ static void starfox_detonate_god_nuke(void) {
     const uint16_t next = starfox_object_next(pointer);
     const uint16_t shape = starfox_object_shape(pointer);
     if (starfox_object_is_player_part(pointer) || shape == kShapeNuke ||
-        starfox_object_strategy(pointer) == kStratNukeExplosion ||
         (g_ram[pointer + kObjCollFlags] & kFriendCollision) ||
         (int8_t)g_ram[pointer + kObjHp] < 0) {
       pointer = next;
@@ -457,7 +465,7 @@ static void starfox_detonate_god_nuke(void) {
 
 static void starfox_clear_god_nuke_state(void) {
   s_nukes_before_count = 0;
-  s_bomb_pressed = false;
+  s_bomb_spawn_wait = 0;
   s_god_nuke_request = false;
   s_armed_god_nuke_count = 0;
 }
@@ -474,15 +482,19 @@ void StarFoxEnhancedPreFrame(uint32 inputs) {
   }
 
   starfox_apply_god_mode_state();
-  s_bomb_pressed = (pressed & kRunnerInputA) != 0;
+  if (!(pressed & kRunnerInputA) || !starfox_gameplay_like_active())
+    return;
+  /* Input polling and object creation can straddle simulated frames. Keep
+   * the pre-press object set until the guest actually creates the bomb;
+   * observing only this frame silently missed normal retail bomb launches. */
+  s_bomb_spawn_wait = kBombSpawnFrameLimit;
   s_god_nuke_request =
-      g_config.god_nuke && s_bomb_pressed && (current & kRunnerInputR) != 0;
+      g_config.god_nuke && (current & kRunnerInputR) != 0;
   s_nukes_before_count = 0;
-  if (s_bomb_pressed &&
-      !starfox_collect_active_nukes(
+  if (!starfox_collect_active_nukes(
           s_nukes_before, sizeof(s_nukes_before) / sizeof(s_nukes_before[0]),
           &s_nukes_before_count)) {
-    s_bomb_pressed = false;
+    s_bomb_spawn_wait = 0;
     s_god_nuke_request = false;
   }
 }
@@ -508,13 +520,16 @@ void StarFoxEnhancedPostFrame(uint32 inputs) {
     return;
   }
 
-  if (s_bomb_pressed) {
+  if (s_bomb_spawn_wait) {
+    bool observed = false;
     for (unsigned i = 0; i < active_nuke_count; i++) {
       const uint16_t pointer = active_nukes[i];
       if (starfox_pointer_in_array(pointer, s_nukes_before,
                                    s_nukes_before_count))
         continue;
-      g_ram[kRamSpecialDelay] = 4;
+      observed = true;
+      /* Keep the retail cooldown. The old $15B1 write hit OAM scratch
+       * instead of the expanded build's SPECIALDELAY variable. */
       if (s_god_nuke_request &&
           !starfox_pointer_in_array(pointer, s_armed_god_nukes,
                                     s_armed_god_nuke_count) &&
@@ -522,6 +537,11 @@ void StarFoxEnhancedPostFrame(uint32 inputs) {
               sizeof(s_armed_god_nukes) / sizeof(s_armed_god_nukes[0])) {
         s_armed_god_nukes[s_armed_god_nuke_count++] = pointer;
       }
+    }
+    if (observed || --s_bomb_spawn_wait == 0) {
+      s_bomb_spawn_wait = 0;
+      s_god_nuke_request = false;
+      s_nukes_before_count = 0;
     }
   }
 
@@ -533,8 +553,7 @@ void StarFoxEnhancedPostFrame(uint32 inputs) {
       continue;
     }
     const uint16_t shape = starfox_object_shape(pointer);
-    if (shape == kShapeNull ||
-        starfox_object_strategy(pointer) == kStratNukeExplosion) {
+    if (shape == kShapeNull) {
       detonations++;
       continue;
     }
@@ -544,9 +563,6 @@ void StarFoxEnhancedPostFrame(uint32 inputs) {
   for (unsigned i = 0; i < detonations; i++)
     starfox_detonate_god_nuke();
 
-  s_bomb_pressed = false;
-  s_god_nuke_request = false;
-  s_nukes_before_count = 0;
 }
 
 static void schedule_first_vblank(void) {

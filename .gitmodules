@@ -1,9 +1,9 @@
 [submodule "snesrecomp"]
 	path = snesrecomp
-	url = https://github.com/mstan/snesrecomp.git
+	url = https://github.com/RetroPortingToolKit/snesrecomp.git
 [submodule "recomp-ui"]
 	path = recomp-ui
-	url = https://github.com/mstan/recomp-ui.git
+	url = https://github.com/RetroPortingToolKit/recomp-ui.git
 [submodule "third_party/starfox-enhanced"]
 	path = third_party/starfox-enhanced
-	url = https://github.com/kandowontu/starfox-enhanced.git
+	url = https://github.com/kandowontu2/starfox-enhanced.git

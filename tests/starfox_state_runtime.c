@@ -61,6 +61,71 @@ static void check_bindings(void) {
   g_launcher_config_path = NULL;
 }
 
+static void put_word(unsigned address, uint16_t value) {
+  g_ram[address] = (uint8_t)value;
+  g_ram[address + 1] = (uint8_t)(value >> 8);
+}
+
+static void check_retail_cheats(size_t capacity) {
+  uint8_t *original = malloc(capacity), *pending = malloc(capacity);
+  size_t original_size = RtlSaveSnapshotToMemory(original, capacity);
+  check(original_size != 0, "capture before cheat fixture");
+  const bool old_god = g_config.god_mode, old_nuke = g_config.god_nuke;
+  const unsigned player = 0x336, wing = 0x36c, enemy = 0x3a2;
+  const unsigned boss = 0x3d8, bomb = 0x40e;
+  const unsigned objects[] = {player, wing, enemy, boss, bomb};
+  for (unsigned i = 0; i < 5; ++i) {
+    memset(g_ram + objects[i], 0, 0x36);
+    put_word(objects[i] + 4, 0xaca1);
+    g_ram[objects[i] + 0x2a] = 32;
+    if (i < 3) put_word(objects[i], objects[i + 1]);
+  }
+  put_word(0x121d, player);
+  put_word(0x1238, player);
+  put_word(0x1563, wing);
+  put_word(0x1565, 0);
+  put_word(0x1567, 0);
+  put_word(0x15ad, 0);
+  put_word(0x162c, 0xa5a5); /* expanded-layout address is scratch here */
+  g_ram[0x15b1] = 0x5a;
+  g_ram[0x14d8] = 0;
+  g_ram[0x14d2] = 0xa4; /* unrelated strategy flags */
+  put_word(enemy + 4, 0xaf5d);
+  put_word(boss + 4, 0xbe90); /* Spinning Core must take normal bomb damage */
+  g_config.god_mode = g_config.god_nuke = true;
+  StarFoxEnhancedPreFrame(SNES_PAD_A | SNES_PAD_R);
+  StarFoxEnhancedPostFrame(SNES_PAD_A | SNES_PAD_R);
+  check((g_ram[0x14d8] & 8) && g_ram[0x15ad] == 3,
+        "God Mode uses retail collision flag and bomb stock");
+  StarFoxEnhancedPreFrame(0);
+  StarFoxEnhancedPostFrame(0); /* guest has not created the bomb yet */
+  size_t pending_size = RtlSaveSnapshotToMemory(pending, capacity);
+  check(pending_size != 0, "save a pending bomb request");
+  g_config.god_mode = false;
+  StarFoxEnhancedPreFrame(0); /* abandon this timeline's pending request */
+  g_config.god_mode = true;
+  check(RtlLoadSnapshotFromMemory(pending, pending_size),
+        "restore pending bomb request into the new timeline");
+  put_word(boss, bomb);
+  put_word(bomb + 4, 0xaf41);
+  StarFoxEnhancedPreFrame(0);
+  StarFoxEnhancedPostFrame(0); /* delayed retail spawn is now observed */
+  put_word(bomb + 4, 0xaca1); /* original guest explosion changes its shape */
+  StarFoxEnhancedPreFrame(0);
+  StarFoxEnhancedPostFrame(0);
+  check(g_ram[enemy + 0x2a] == 0 && g_ram[boss + 0x2a] == 22,
+        "delayed God Nuke kills ordinary enemies and respects boss phases");
+  check(g_ram[player + 0x2a] == 32 && g_ram[wing + 0x2a] == 32 &&
+        g_ram[0x1563] == (uint8_t)wing && g_ram[0x162c] == 0xa5 &&
+        g_ram[0x15b1] == 0x5a && g_ram[0x14d2] == 0xa4,
+        "cheats preserve player parts, pointers, matrices and OAM scratch");
+  g_config.god_mode = old_god;
+  g_config.god_nuke = old_nuke;
+  check(RtlLoadSnapshotFromMemory(original, original_size), "restore after cheat fixture");
+  free(pending);
+  free(original);
+}
+
 int main(int argc, char **argv) {
   check(argc == 2 || (argc == 3 && !strcmp(argv[2], "--resume")), "owner ROM supplied");
   if (argc == 2)
@@ -105,6 +170,7 @@ int main(int argc, char **argv) {
     check(n == cn && !memcmp(control, restored, n), "new-process replay matches original execution");
     return 0;
   }
+  check_retail_cheats(cap);
   for (int phase = 0; phase < 3; phase++) {
     for (int i = 0; i < (phase == 2 ? 5000 : 600); i++) {
       frame(i == 200 || i == 350 ? SNES_PAD_START : 0);
