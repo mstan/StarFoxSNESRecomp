@@ -189,6 +189,20 @@ int main(int argc, char **argv) {
     check(!RtlLoadSnapshotFromMemory(start, n), "old incomplete states are rejected");
     check(g_cpu.master_cycles == saved_clock, "rejected state leaves machine untouched");
     memcpy(start + 4, &current_version, 4);
+    size_t guest_size = RtlSnapshotGuestSize(NULL);
+    replay(1); /* an older candidate must not overwrite the current timeline */
+    size_t unchanged_size = RtlSaveSnapshotToMemory(restored, cap);
+    uint32_t extension_version;
+    memcpy(&extension_version, start + guest_size + 4, sizeof(extension_version));
+    uint32_t incomplete_extension = 1;
+    memcpy(start + guest_size + 4, &incomplete_extension, sizeof(incomplete_extension));
+    check(!RtlLoadSnapshotFromMemory(start, n), "old execution extension is rejected before restoration");
+    check(!RtlLoadSnapshotFromMemory(start, guest_size), "missing execution extension is rejected");
+    size_t unchanged_after = RtlSaveSnapshotToMemory(control, cap);
+    check(unchanged_after == unchanged_size && !memcmp(control, restored, unchanged_size),
+          "rejected execution extensions leave the complete machine untouched");
+    memcpy(start + guest_size + 4, &extension_version, sizeof(extension_version));
+    check(RtlLoadSnapshotFromMemory(start, n), "current execution extension still restores");
     replay(30);
     size_t cn = RtlSaveSnapshotToMemory(control, cap);
     check(RtlLoadSnapshotFromMemory(start, n), "memory state restores");

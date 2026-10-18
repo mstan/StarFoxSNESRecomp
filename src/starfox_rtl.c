@@ -98,6 +98,31 @@ static unsigned s_state_generation;
 static bool s_extra_loaded;
 static PpuRollbackResidue s_loaded_ppu;
 
+static bool starfox_execution_valid(const StarFoxExecutionState *state) {
+  return state->bridge_size == interp_bridge_rb_state_size() &&
+      state->nuke_count <= 8 && state->nukes_before_count <= 8 &&
+      state->bomb_spawn_wait <= kBombSpawnFrameLimit &&
+      state->god_nuke_request <= 1 &&
+      (!state->started || cpu_pc24_resumable(state->resume_pc));
+}
+
+bool StarFoxSnapshotPreflight(const void *data, size_t size) {
+  /* Check the title extension before the common loader writes guest memory.
+   * A void state_load_extra rejection alone is too late: it used to report
+   * success after splicing an old guest blob into the current CPU timeline. */
+  const size_t guest_size = RtlSnapshotGuestSize(NULL);
+  uint32_t header[3];
+  StarFoxExecutionState state;
+  if (!data || !guest_size || size < guest_size ||
+      size - guest_size != sizeof(header) + sizeof(state))
+    return false;
+  memcpy(header, (const uint8_t *)data + guest_size, sizeof(header));
+  if (header[0] != 0x53465853u || header[1] != 2 || header[2] != sizeof(state))
+    return false;
+  memcpy(&state, (const uint8_t *)data + guest_size + sizeof(header), sizeof(state));
+  return starfox_execution_valid(&state);
+}
+
 unsigned StarFoxStateGeneration(void) { return s_state_generation; }
 
 void StarFoxSaveStateExtra(SaveLoadInfo *sli) {
@@ -150,11 +175,7 @@ void StarFoxLoadStateExtra(SaveLoadInfo *sli, uint32_t version) {
     return;
   }
   sli->func(sli, &state, sizeof(state));
-  if (state.bridge_size != interp_bridge_rb_state_size() ||
-      state.nuke_count > 8 ||
-      state.nukes_before_count > 8 || state.bomb_spawn_wait > kBombSpawnFrameLimit ||
-      state.god_nuke_request > 1 ||
-      (state.started && !cpu_pc24_resumable(state.resume_pc))) {
+  if (!starfox_execution_valid(&state)) {
     fprintf(stderr, "[starfox] invalid execution-state extension\n");
     return;
   }
