@@ -113,6 +113,18 @@ if (Test-Path -LiteralPath $mods) {
   -replace '^Arwing64Rom\s*=.*$', 'Arwing64Rom =' |
   Out-File (Join-Path $stage 'config.ini') -Encoding ascii
 
+# Mod selections belong to the player, not the build machine.
+$stageMods = Join-Path $stage 'mods'
+if (Test-Path -LiteralPath $stageMods) {
+  Get-ChildItem -LiteralPath $stageMods -Recurse -File -Filter 'state.toml*' |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+}
+# Never publish an unattended diagnostic build.
+$cache = Join-Path $build 'CMakeCache.txt'
+if (Select-String -LiteralPath $cache -Pattern '^SNESRECOMP_ENABLE_TRACE:[^=]+=ON$' -Quiet) {
+  throw 'Refusing to package a trace build (SNESRECOMP_ENABLE_TRACE=ON).'
+}
+
 # Runtime DLLs are NOT enumerated by hand. A hardcoded list is a snapshot of
 # the import graph on the day it was written, and it silently omits anything a
 # later toolchain/SDL bump pulls in - e.g. SDL3 3.4.14 links libiconv-2.dll
