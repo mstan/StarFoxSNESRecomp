@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 #include "debug_server.h"
 /* MinGW/CMake build: keep plain main() as the entry point instead of
  * SDL2main's WinMain->SDL_main indirection (which left SDL_main
@@ -960,12 +961,8 @@ int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
   static const char kStarFoxExtraUsage[] =
       "\nStar Fox only:\n"
       "  --frames <n>          exit cleanly after n simulated frames.\n";
-  SnesrecompHostArgs args;
-  if (!snesrecomp_host_args_parse(&argc, &argv, &args)) return 2;
-  if (args.help) {
-    snesrecomp_host_args_usage(program_path, kStarFoxExtraUsage);
-    return 0;
-  }
+  /* Consume this title's valued flag first. Otherwise the shared parser can
+   * mistake its count for the positional ROM when --frames precedes it. */
   uint32 max_frames = 0;
   for (int i = 1; i < argc; ) {
     if (!argv[i] || strcmp(argv[i], "--frames") != 0) { i++; continue; }
@@ -973,9 +970,23 @@ int STARFOX_DESKTOP_ENTRY(int argc, char** argv) {
       fprintf(stderr, "--frames requires a count\n");
       return 2;
     }
-    max_frames = (uint32)strtoul(argv[i + 1], NULL, 0);
+    char *end = NULL;
+    errno = 0;
+    unsigned long count = strtoul(argv[i + 1], &end, 10);
+    if (errno || argv[i + 1][0] == '-' || !argv[i + 1][0] ||
+        !end || *end || count > UINT32_MAX) {
+      fprintf(stderr, "--frames requires an unsigned 32-bit frame count\n");
+      return 2;
+    }
+    max_frames = (uint32)count;
     for (int j = i; j + 2 <= argc; j++) argv[j] = argv[j + 2];
     argc -= 2;
+  }
+  SnesrecompHostArgs args;
+  if (!snesrecomp_host_args_parse(&argc, &argv, &args)) return 2;
+  if (args.help) {
+    snesrecomp_host_args_usage(program_path, kStarFoxExtraUsage);
+    return 0;
   }
   if (!snesrecomp_host_args_reject_unknown(argc, argv, program_path,
                                            kStarFoxExtraUsage))
