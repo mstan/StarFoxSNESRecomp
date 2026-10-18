@@ -12,4 +12,5 @@ const RtlGameInfo kStarFoxGameInfo = {
   .state_load_extra = StarFoxLoadStateExtra,
   .on_state_loaded = StarFoxStateLoaded,
   .minimum_state_version = 9,
+  .snapshot_preflight = StarFoxSnapshotPreflight,
 };

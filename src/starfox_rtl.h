@@ -14,5 +14,6 @@ void StarFoxSaveStateExtra(struct SaveLoadInfo *sli);
 void StarFoxLoadStateExtra(struct SaveLoadInfo *sli, uint32_t version);
 void StarFoxStateLoaded(uint32_t version);
 unsigned StarFoxStateGeneration(void);
+bool StarFoxSnapshotPreflight(const void *data, size_t size);
 
 #endif
