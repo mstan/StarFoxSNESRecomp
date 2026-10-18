@@ -578,6 +578,10 @@ static void DrawPpuFrameWithPerf(void) {
   RtlDrawPpuFrame(pixel_buffer, pitch, g_ppu_render_flags);
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
+  // Enhanced rendering may replace the PPU surface entirely. Debug screenshots
+  // must observe this completed presentation, including its widescreen pixels.
+  debug_server_note_composed_frame(pixel_buffer, pitch, g_snes_width,
+                                   g_snes_height);
 
   // Finish cached presentations before replacing their history entry. CPU
   // rendering runs between display slots; no SDL texture stays locked across

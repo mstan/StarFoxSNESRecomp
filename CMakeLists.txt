@@ -67,6 +67,7 @@ set(STARFOX_REFERENCE_SOURCES
   third_party/starfox-enhanced/src/assets/rom.cpp
   third_party/starfox-enhanced/src/assets/shape_decoder.cpp
   third_party/starfox-enhanced/src/render/background_renderer.cpp
+  third_party/starfox-enhanced/src/render/face_material.cpp
   third_party/starfox-enhanced/src/render/scaled_text_renderer.cpp
   third_party/starfox-enhanced/src/render/software_renderer.cpp
   third_party/starfox-enhanced/src/render/sprite_renderer.cpp

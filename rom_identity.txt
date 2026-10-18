@@ -1,0 +1,8 @@
+display_name = Star Fox
+rom_file = starfox.sfc
+expected_crc32 = 8FC4E6D0
+expected_sha256 = 82e39dfbb3e4fe5c28044e80878392070c618b298dd5a267e5ea53c8f72cc548
+rom_size = 1048576
+mapping = LoROM
+region = USA
+game_id = starfox-us

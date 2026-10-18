@@ -340,3 +340,7 @@ part of this repository and are not licensed for redistribution.
   <sub><b>R.A.I.D. â€” Retro AI Development</b> Â· a Discord for AI-assisted retro reverse-engineering, decomp &amp; recomp</sub><br>
   <a href="https://discord.gg/Ad9BwSzctP">Join the R.A.I.D. community</a>
 </p>
+
+## Coverage survey and regeneration
+
+Game-owned generation policy is in `recomp/generate.toml`; the shared framework runs the same hooks for `tools/regen.sh` and launcher rebuilds. See the [2026-10-18 coverage survey](docs/COVERAGE_2026-10-18.md) for verified ROM identity, observed scenes, corrections, and remaining validation limits.

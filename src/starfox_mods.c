@@ -40,7 +40,7 @@ static const char kStarFoxModsPackageName[] = "Star Fox Enhanced Built-ins";
 static const char kStarFoxModsAuthor[] = "kandowontu (starfox-enhanced)";
 static const char kStarFoxModsSourceName[] = "starfox-enhanced";
 static const char kStarFoxModsSourceUrl[] =
-    "https://github.com/kandowontu/starfox-enhanced";
+    "https://github.com/kandowontu2/starfox-enhanced";
 
 static const StarFoxModFeatureInfo kStarFoxModFeatures[] = {
   {
